@@ -334,10 +334,9 @@
   flex-direction: column;
   gap: 2px;
   height: var(--card-body-h, auto);
-  max-height: 72vh;
   overflow-y: auto;
 }
-.card-body[data-fit="auto"] { height: auto; max-height: none; }
+.card-body[data-fit="auto"] { height: auto; }
 
 /* Resize handle (vertical height only; width is a global setting) */
 .card-resize {
