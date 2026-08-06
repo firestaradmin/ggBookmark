@@ -8,7 +8,9 @@
   --bg-base: #0f1728;
   --glass: rgba(255, 255, 255, 0.06);
   --glass-strong: rgba(255, 255, 255, 0.1);
-  --glass-border: rgba(255, 255, 255, 0.14);
+  /* dark-tinted border so it never looks "white/glowing" over a bright bg */
+  --glass-border: rgba(0, 0, 0, 0.28);
+  --glass-border-soft: rgba(0, 0, 0, 0.18);
   --text: #eef2fb;
   --text-dim: #9aa7c4;
   --text-faint: #64708f;
