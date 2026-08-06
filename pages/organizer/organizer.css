@@ -172,9 +172,11 @@
   z-index: 60;
 }
 
-#moveMenu { position: fixed; z-index: 80; display: none; }
-#moveMenu.open { display: block; max-height: 320px; overflow-y: auto; }
-#moveMenu .menu-item { font-size: 12.5px; }
+  #moveMenu { position: fixed; z-index: 80; display: none; }
+  #moveMenu.open { display: block; max-height: 320px; overflow-y: auto; }
+  #moveMenu .menu-item { font-size: 12.5px; }
+  #ctxMenu { position: fixed; z-index: 90; display: none; min-width: 160px; padding: 6px; }
+  #ctxMenu.open { display: block; }
 
 @media (max-width: 760px) {
   .layout { grid-template-columns: 1fr; height: auto; }

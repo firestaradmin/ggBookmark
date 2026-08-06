@@ -97,11 +97,13 @@
       else collapse.add(node.id);
       const sub = wrap.querySelector(':scope > .tree-children');
       activateCollapse(sub, node.id);
+      setFolderIcon();
     });
 
     const icon = document.createElement('span');
     icon.className = 'tr-icon folder';
-    icon.innerHTML = GG.icon('folder');
+    const setFolderIcon = () => { icon.innerHTML = collapse.has(node.id) ? GG.icon('folder') : GG.icon('folderOpen'); };
+    setFolderIcon();
 
     const name = document.createElement('span');
     name.className = 'tr-name';
@@ -121,6 +123,16 @@
     row.addEventListener('click', (e) => {
       if (e.target.closest('.tr-more') || e.target.closest('.tw-toggle')) return;
       selectFolder(node.id);
+    });
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openCtxMenu(e.clientX, e.clientY, [
+        { label: '打开此文件夹', ic: 'folder', fn: () => selectFolder(node.id) },
+        { label: '在此新建文件夹', ic: 'folderPlus', fn: () => newFolder(node.id) },
+        { label: '重命名', ic: 'settings', fn: () => promptRename(node) },
+        { label: '删除文件夹', ic: 'trash', fn: () => deleteItem(node), danger: true }
+      ]);
     });
     // allow dropping bookmark onto a folder
     row.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
@@ -232,6 +244,26 @@
       item.addEventListener('dblclick', () => {
         if (node.type === 'bookmark') browser.tabs.create({ url: node.url });
         else selectFolder(node.id);
+      });
+
+      // right-click context menu for this item (rename / delete / open)
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (node.type === 'bookmark') {
+          openCtxMenu(e.clientX, e.clientY, [
+            { label: '打开链接', ic: 'external', fn: () => browser.tabs.create({ url: node.url }) },
+            { label: '编辑', ic: 'settings', fn: () => promptRename(node) },
+            { label: '编辑链接', ic: 'external', fn: () => editBookmarkUrl(node) },
+            { label: '删除书签', ic: 'trash', fn: () => deleteItem(node), danger: true }
+          ]);
+        } else {
+          openCtxMenu(e.clientX, e.clientY, [
+            { label: '打开此文件夹', ic: 'folder', fn: () => selectFolder(node.id) },
+            { label: '重命名', ic: 'settings', fn: () => promptRename(node) },
+            { label: '删除文件夹', ic: 'trash', fn: () => deleteItem(node), danger: true }
+          ]);
+        }
       });
 
       // dragging: reorder/move bookmarks
@@ -499,6 +531,78 @@
     closeMenuOnOutside(menu);
   }
   function renameFolder(node) { openRename(node); }
+
+  // ---------- Generic right-click context menu ----------
+  function openCtxMenu(x, y, items) {
+    const menu = $('#ctxMenu');
+    menu.innerHTML = '';
+    items.forEach((it) => {
+      const b = document.createElement('button');
+      b.className = 'menu-item' + (it.danger ? ' danger' : '');
+      b.innerHTML = GG.icon(it.ic) + '<span></span>';
+      b.querySelector('span').textContent = it.label;
+      b.addEventListener('click', () => { menu.classList.remove('open'); it.fn(); });
+      menu.appendChild(b);
+    });
+    menu.classList.add('open');
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    menu.style.left = Math.min(x, window.innerWidth - mw - 8) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - mh - 8) + 'px';
+    closeCtxMenuOnOutside(menu);
+  }
+
+  let ctxMenuCleanup = null;
+  function closeCtxMenuOnOutside(menu) {
+    if (ctxMenuCleanup) document.removeEventListener('click', ctxMenuCleanup);
+    ctxMenuCleanup = (e) => { if (!menu.contains(e.target)) menu.classList.remove('open'); };
+    setTimeout(() => document.addEventListener('click', ctxMenuCleanup), 0);
+  }
+
+  // Rename via prompt (works for folders and bookmarks anywhere).
+  async function promptRename(node) {
+    const name = prompt('名称：', node.title || '');
+    if (!name || !name.trim() || name.trim() === node.title) return;
+    try {
+      await browser.bookmarks.update(node.id, { title: name.trim() });
+      pushHistory({ type: 'rename', id: node.id, was: node.title });
+      GG.toast.show('已重命名', 'success');
+      refresh();
+    } catch (e) { GG.toast.show('重命名失败', 'error'); }
+  }
+
+  // Edit a bookmark's URL (hyperlink).
+  async function editBookmarkUrl(node) {
+    const url = prompt('链接地址：', node.url || '');
+    if (!url || !url.trim()) return;
+    const trimmed = url.trim();
+    if (trimmed === node.url) return;
+    try {
+      await browser.bookmarks.update(node.id, { url: trimmed });
+      pushHistory({ type: 'rename', id: node.id, was: node.title });
+      GG.toast.show('已更新链接', 'success');
+      refresh();
+    } catch (e) { GG.toast.show('更新链接失败', 'error'); }
+  }
+
+  // Delete a single node (folder recursively, or bookmark).
+  async function deleteItem(node) {
+    if (node.type === 'folder') {
+      if (!confirm(`确定删除文件夹“${node.title}”及其所有内容？`)) return;
+      await browser.bookmarks.removeTree(node.id).catch(() => {});
+      pushHistory({ type: 'deleteFolder', id: node.id, title: node.title, parentId: node.parentId });
+      GG.toast.show('已删除文件夹', 'success');
+    } else {
+      if (!confirm(`确定删除书签“${node.title || node.url}”？`)) return;
+      await browser.bookmarks.remove(node.id).catch(() => {});
+      pushHistory({
+        type: 'delete',
+        captured: { [node.id]: { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: null } }
+      });
+      GG.toast.show('已删除', 'success');
+    }
+    refresh();
+  }
+
   async function deleteFolder(node) {
     if (!confirm(`确定删除文件夹“${node.title}”及其所有内容？`)) return;
     await browser.bookmarks.removeTree(node.id).catch(() => {});
