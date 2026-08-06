@@ -211,6 +211,7 @@
   align-items: stretch;
   gap: 18px;
   overflow: visible;
+  min-height: calc(100vh - var(--topbar-h) - 104px);
 }
 .grid[data-empty="true"] .grid-col { display: none; }
 

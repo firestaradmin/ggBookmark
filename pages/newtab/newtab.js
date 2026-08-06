@@ -1014,7 +1014,7 @@
     if (col) return Number(col.dataset.col);
     // fallback: pick the column whose horizontal band contains the cursor
     const cols = Array.from(grid.querySelectorAll('.grid-col'));
-    if (!cols.length) return null;
+    if (!cols.length) return 0; // empty grid: default to first column
     const x = e.clientX;
     let best = 0, bestDist = Infinity;
     cols.forEach((c, i) => {
@@ -1028,7 +1028,6 @@
     closeGridMenu();
     if (e.target.closest('.card')) return; // don't trigger over a card
     const col = columnFromEvent(e);
-    if (col == null) return;
     const colEl = grid.querySelector(`.grid-col[data-col="${col}"]`);
     if (colEl) colEl.classList.add('col-target');
     const menu = document.createElement('div');
