@@ -422,9 +422,17 @@
   // Compact mode: when a card's body is short, tiles collapse to a single row
   // (title + domain on one line) with a smaller icon.
   // app.compact: undefined = auto-detect, true/false = user override.
+  // settings.compactAll (when not null) forces the same mode on every card.
+  function resolveCompact(app) {
+    if (state.settings.compactAll !== null && state.settings.compactAll !== undefined) {
+      return !!state.settings.compactAll;
+    }
+    let compact = app.compact;
+    return compact; // may be undefined -> caller handles auto-detect
+  }
   function applyCompact(card, app) {
     const verbosePerTile = 44;
-    let compact = app.compact;
+    let compact = resolveCompact(app);
     if (compact === undefined) {
       const body = card.querySelector('.card-body');
       const tileCount = body.querySelectorAll('.tile').length || 1;
@@ -438,7 +446,11 @@
 
   // Live recompute during resize; only reflects DOM, does not persist pref.
   function recomputeCompact(card, app) {
-    if (app.compact !== undefined) return; // user override wins
+    // global force or per-card user override both win over auto-detect
+    if ((state.settings.compactAll !== null && state.settings.compactAll !== undefined) || app.compact !== undefined) {
+      card.classList.toggle('compact', !!resolveCompact(app));
+      return;
+    }
     const verbosePerTile = 44;
     const body = card.querySelector('.card-body');
     const tileCount = body.querySelectorAll('.tile').length || 1;
@@ -503,6 +515,37 @@
     persist();
     renderCards();
     GG.toast.show('已按子项数量调整所有卡片高度', 'success');
+  }
+
+  // Global compact toggle: cycles per-card auto -> force on -> force off.
+  function syncCompactBtn() {
+    const btn = $('#btnCompact');
+    if (!btn) return;
+    const v = state.settings.compactAll;
+    if (v === true) {
+      btn.innerHTML = GG.icon('compactOn');
+      btn.title = '紧凑模式：全部开启（点击关闭/自动）';
+      btn.classList.add('active');
+    } else if (v === false) {
+      btn.innerHTML = GG.icon('compactOff');
+      btn.title = '紧凑模式：全部关闭（点击恢复自动）';
+      btn.classList.add('active');
+    } else {
+      btn.innerHTML = GG.icon('compactAuto');
+      btn.title = '紧凑模式：跟随各卡片（点击全部开启）';
+      btn.classList.remove('active');
+    }
+  }
+  function toggleCompactAll() {
+    const cur = state.settings.compactAll;
+    // null/undefined -> true -> false -> null
+    state.settings.compactAll = (cur === null || cur === undefined) ? true : (cur === true ? false : null);
+    GG.saveSettings(state.settings);
+    syncCompactBtn();
+    renderCards();
+    const label = state.settings.compactAll === true ? '已开启全部紧凑'
+      : state.settings.compactAll === false ? '已关闭全部紧凑' : '已恢复各卡片默认';
+    GG.toast.show(label, 'success');
   }
 
   function setupCardMenu(card, app) {
@@ -913,6 +956,9 @@
     const btnFitAll = $('#btnFitAll');
     btnFitAll.innerHTML = GG.icon('fit');
     btnFitAll.addEventListener('click', fitAllCards);
+    const btnCompact = $('#btnCompact');
+    btnCompact.addEventListener('click', toggleCompactAll);
+    syncCompactBtn();
     $('#btnSettings').innerHTML = GG.icon('settings');
     $('#btnSettings').addEventListener('click', () => browser.runtime.openOptionsPage());
     const btnOrg = $('#btnOrganize');
@@ -997,7 +1043,9 @@
         colWidth = state.settings.cardWidth || 320;
         applyBg();
         renderSearchEngine();
+        syncCompactBtn();
         if (prevWidth !== colWidth) renderCards();  // rebalance columns
+        else renderCards(); // refresh compact state from global setting
       }
     });
     // open menu close
