@@ -524,7 +524,20 @@
 .tree-row .tw-toggle.collapsed { transform: rotate(-90deg); }
 .tree-row .tw-icon { width: 18px; height: 18px; color: var(--accent); }
 .tree-row .tw-icon svg { width: 100%; height: 100%; }
-.tree-row .tw-title { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-row .tw-title { flex: 1; font-size: 13px;   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: text;
+}
+.card-title-edit {
+  width: 100%;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--glass-input, rgba(255,255,255,.12));
+  border: 1px solid var(--accent, #6c8cff);
+  border-radius: 6px;
+  padding: 1px 6px;
+  outline: none;
+}
 .tree-row .tw-count { font-size: 11px; color: var(--text-faint); background: var(--glass); padding: 1px 7px; border-radius: 8px; }
 .tree-children { margin-left: 14px; border-left: 1px dashed rgba(255,255,255,.08); padding-left: 4px; display: block; }
 .tree-children.collapsed { display: none; }

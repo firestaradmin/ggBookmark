@@ -394,6 +394,12 @@
     card.dataset.folderId = app.folderId;
     card.dataset.recursive = app.recursive ? '1' : '0';
     card.querySelector('.card-title').textContent = app.title;
+    const titleEl = card.querySelector('.card-title');
+    titleEl.title = '双击重命名';
+    titleEl.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      editCardTitle(card, app, titleEl);
+    });
     const body = card.querySelector('.card-body');
     body.dataset.appId = app.id;
     const fit = app.fitMode === 'auto';
@@ -445,6 +451,33 @@
       const t = body.querySelector(`.tile[data-url="${CSS.escape(url)}"]`);
       if (t) t.remove();
     });
+  }
+
+  function editCardTitle(card, app, titleEl) {
+    if (titleEl.querySelector('input')) return;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'card-title-edit';
+    input.value = app.title;
+    titleEl.textContent = '';
+    titleEl.appendChild(input);
+    input.focus();
+    input.select();
+    const finish = (save) => {
+      if (save && input.value.trim() && input.value.trim() !== app.title) {
+        const newTitle = input.value.trim();
+        app.title = newTitle;
+        persist();
+        browser.bookmarks.update(app.folderId, { title: newTitle }).catch(() => {});
+      }
+      titleEl.textContent = app.title;
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('click', (e) => e.stopPropagation());
   }
 
   // Compact mode: when a card's body is short, tiles collapse to a single row
@@ -633,7 +666,7 @@
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
     add('包含子文件夹', 'folderPlus', () => { app.recursive = !app.recursive; persist(); renderCards(); });
-    add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim()) { app.title = n.trim(); persist(); renderAll(); } });
+    add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); browser.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
     more.innerHTML = GG.icon('settings');
     more.addEventListener('click', (e) => { e.stopPropagation(); openMenu(menu, more); });
@@ -1150,6 +1183,18 @@
         syncViewMenu();
         if (prevWidth !== colWidth) renderCards();  // rebalance columns
         else renderCards(); // refresh compact state from global setting
+      }
+    });
+    // folder renamed elsewhere -> sync card title
+    browser.bookmarks.onChanged.addListener((id, changeInfo) => {
+      if (changeInfo.title === undefined) return;
+      const app = state.apps.find((a) => a.folderId === id);
+      if (!app) return;
+      app.title = changeInfo.title;
+      const card = document.querySelector(`.card[data-folder-id="${CSS.escape(id)}"]`);
+      if (card) {
+        const t = card.querySelector('.card-title');
+        if (t && !t.querySelector('input')) t.textContent = changeInfo.title;
       }
     });
     // open menu close
