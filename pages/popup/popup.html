@@ -83,6 +83,7 @@
       margin: 0; font-size: 14px; font-weight: 600;
       display: flex; align-items: center; gap: 8px;
     }
+    .pp-settings .s-head #btnSave { margin-left: auto; margin-right: 10px; }
     .pp-settings .s-head svg { width: 16px; height: 16px; color: var(--accent); }
     .pp-settings .s-close {
       width: 28px; height: 28px; border-radius: 8px;
@@ -144,6 +145,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           设置
         </h2>
+        <button class="btn primary" id="btnSave">保存设置</button>
         <button class="s-close" id="ppSettingsClose" title="返回">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
@@ -249,15 +251,59 @@
             <div class="hint">导出为 JSON 文件备份；导入会覆盖当前设置；清除会恢复全部默认并删除本地配置。</div>
           </section>
 
-          <div class="footer">
-            <button class="btn primary" id="btnSave">保存设置</button>
-          </div>
+          <section class="group">
+            <h2>同步</h2>
+            <div class="field">
+              <label>启用同步</label>
+              <label class="cb"><input type="checkbox" id="syncEnabled"> 启用 WebDAV 同步</label>
+            </div>
+            <div class="field col">
+              <label>服务器地址</label>
+              <input id="syncServer" type="text" placeholder="https://example.com/dav">
+            </div>
+            <div class="field">
+              <label>用户名</label>
+              <input id="syncUser" type="text" placeholder="可选">
+            </div>
+            <div class="field">
+              <label>密码</label>
+              <input id="syncPass" type="password" placeholder="可选">
+            </div>
+            <div class="field">
+              <label>连接测试</label>
+              <button class="btn ghost" id="btnSyncTest">测试连接</button>
+            </div>
+            <div class="field">
+              <label>文件名</label>
+              <input id="syncFile" type="text" placeholder="ggbookmark-config.json">
+            </div>
+            <div class="field">
+              <label>同步方式</label>
+              <select id="syncMode">
+                <option value="manual">手动（仅按钮）</option>
+                <option value="interval">定时备份</option>
+                <option value="settingsChange">设置更改时</option>
+                <option value="bookmarkChange">书签被修改时</option>
+              </select>
+            </div>
+            <div class="field" id="syncIntervalField">
+              <label>间隔(分钟)</label>
+              <input id="syncInterval" type="number" min="1" value="30">
+            </div>
+            <div class="field actions data-ops">
+              <button class="btn" id="btnSyncUpload">上传到服务器</button>
+              <button class="btn" id="btnSyncDownload">从服务器下载</button>
+            </div>
+            <div class="hint">上传/下载的配置文件与导入导出格式完全一致。修改上述同步设置后请点击“保存设置”。</div>
+          </section>
+
         </div>
       </div>
     </div>
   </div>
 
   <script src="../../lib/store.js"></script>
+  <script src="../../lib/sync.js"></script>
   <script src="../../js/shared.js"></script>
   <script src="../settings/settings.js"></script>
   <script src="popup.js"></script>

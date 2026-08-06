@@ -6,7 +6,9 @@
   "permissions": [
     "bookmarks",
     "storage",
-    "tabs"
+    "tabs",
+    "alarms",
+    "<all_urls>"
   ],
   "browser_specific_settings": {
     "gecko": {
@@ -20,7 +22,8 @@
   },
   "background": {
     "scripts": [
-      "lib/store.js"
+      "lib/store.js",
+      "lib/sync.js"
     ]
   },
   "options_ui": {

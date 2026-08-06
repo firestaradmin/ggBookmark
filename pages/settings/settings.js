@@ -354,6 +354,30 @@
     updatePreview();
     markActivePreset();
     toggleBgFields();
+    loadSync();
+  }
+  function loadSync() {
+    const sync = Object.assign({}, GG.DEFAULTS.sync, settings.sync || {});
+    if ($('#syncEnabled')) $('#syncEnabled').checked = !!sync.enabled;
+    if ($('#syncServer')) $('#syncServer').value = sync.server || '';
+    if ($('#syncUser')) $('#syncUser').value = sync.username || '';
+    if ($('#syncPass')) $('#syncPass').value = sync.password || '';
+    if ($('#syncFile')) $('#syncFile').value = sync.filename || 'ggbookmark-config.json';
+    if ($('#syncMode')) $('#syncMode').value = sync.mode || 'manual';
+    if ($('#syncInterval')) $('#syncInterval').value = sync.intervalMinutes || 30;
+    const iv = document.getElementById('syncIntervalField');
+    if (iv) iv.style.display = (sync.mode === 'interval') ? '' : 'none';
+  }
+  function readSync() {
+    return {
+      enabled: $('#syncEnabled') ? $('#syncEnabled').checked : false,
+      server: $('#syncServer') ? $('#syncServer').value.trim() : '',
+      username: $('#syncUser') ? $('#syncUser').value.trim() : '',
+      password: $('#syncPass') ? $('#syncPass').value : '',
+      filename: ($('#syncFile') ? $('#syncFile').value.trim() : '') || 'ggbookmark-config.json',
+      mode: $('#syncMode') ? $('#syncMode').value : 'manual',
+      intervalMinutes: $('#syncInterval') ? (Number($('#syncInterval').value) || 30) : 30
+    };
   }
   function updatePreview() {
     const preview = $('#bgPreview');
@@ -465,9 +489,11 @@
       settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
       const activeTheme = document.querySelector('.theme-btn.active');
       if (activeTheme) settings.theme = activeTheme.dataset.theme;
+      settings.sync = readSync();
       const activeDot = document.querySelector('.color-dot.active');
       if (activeDot) settings.accentColor = activeDot.dataset.color;
       await GG.saveSettings(settings);
+      if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
       GG.toast.show('设置已保存', 'success');
     });
 
@@ -598,6 +624,51 @@
         GG.toast.show('导入失败：文件无效', 'error');
       }
     });
+
+    // 同步：手动上传 / 下载 + 方式切换显示间隔
+    const syncMode = $('#syncMode');
+    if (syncMode) {
+      syncMode.addEventListener('change', () => {
+        const iv = document.getElementById('syncIntervalField');
+        if (iv) iv.style.display = syncMode.value === 'interval' ? '' : 'none';
+      });
+    }
+    if ($('#btnSyncUpload')) {
+      $('#btnSyncUpload').addEventListener('click', async () => {
+        try {
+          await GG.Sync.upload();
+          GG.toast.show('已上传到服务器', 'success');
+        } catch (e) {
+          GG.toast.show('上传失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+        }
+      });
+    }
+    if ($('#btnSyncDownload')) {
+      $('#btnSyncDownload').addEventListener('click', async () => {
+        try {
+          await GG.Sync.download();
+          browser.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
+          GG.toast.show('已从服务器下载并应用', 'success');
+        } catch (e) {
+          GG.toast.show('下载失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+        }
+      });
+    }
+    if ($('#btnSyncTest')) {
+      $('#btnSyncTest').addEventListener('click', async () => {
+        const cfg = readSync();
+        if (!cfg.server) {
+          GG.toast.show('请先填写服务器地址', 'info');
+          return;
+        }
+        try {
+          const status = await GG.Sync.testConnection(cfg);
+          GG.toast.show('连接成功（HTTP ' + status + '）', 'success');
+        } catch (e) {
+          GG.toast.show('连接失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+        }
+      });
+    }
 
     // 清除配置：恢复默认并删除本地存储（仅本扩展配置，不删除 Firefox 书签）
     $('#btnClear').addEventListener('click', async () => {

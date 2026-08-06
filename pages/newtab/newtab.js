@@ -74,6 +74,22 @@
     });
   }
 
+  // 根据同步模式触发上传（由设置/书签变更事件调用）
+  let syncTimer = null;
+  function maybeSync(mode) {
+    if (!GG.Sync) return;
+    const sync = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
+    if (!sync.enabled || sync.mode !== mode) return;
+    // 防抖：短时间内多次变更只同步一次
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncTimer = null;
+      GG.Sync.upload().catch((e) => {
+        console.warn('[gg] 自动同步失败：', e && e.message);
+      });
+    }, 1500);
+  }
+
   // ---------- Search ----------
   function renderSearchEngine() {
     const se = GG.SEARCH_ENGINES[state.settings.searchEngine] || GG.SEARCH_ENGINES.bing;
@@ -1288,6 +1304,7 @@
     renderSearchEngine();
     wireButtons();
     wireImportFolder();
+    if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
     enableGridDrag();
     enableColumnDrop();
     // close menus on outside click / scroll / escape
@@ -1327,6 +1344,7 @@
         syncViewMenu();
         if (prevWidth !== colWidth) renderCards();  // rebalance columns
         else renderCards(); // refresh compact state from global setting
+        maybeSync('settingsChange');
       }
       if (cardsChanged) {
         reloadAndRender();
@@ -1345,6 +1363,11 @@
         if (t && !t.querySelector('input')) t.textContent = changeInfo.title;
       }
     });
+    // 书签被创建/删除/移动时也触发同步（bookmarkChange 模式）
+    const syncOnBookmark = () => maybeSync('bookmarkChange');
+    browser.bookmarks.onCreated.addListener(syncOnBookmark);
+    browser.bookmarks.onRemoved.addListener(syncOnBookmark);
+    browser.bookmarks.onMoved.addListener(syncOnBookmark);
     // open menu close
 
     // reload everything when config imported/cleared from settings page
