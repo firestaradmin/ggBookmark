@@ -42,12 +42,14 @@
     $('#bgDimVal').textContent = dim.toFixed(2);
     bg.style.setProperty('--bg-blur', blur + 'px');
     bg.style.setProperty('--bg-dim', String(dim));
-    if (currentStyle === 'image' && $('#bgUrl').value.trim()) {
+    if ((currentStyle === 'image' || currentStyle === 'preset') && $('#bgUrl').value.trim()) {
       const raw = $('#bgUrl').value.trim();
       const preset = presetNameFromValue(raw);
       const imgUrl = preset ? presetURL(preset) : raw;
       bg.dataset.style = 'image';
       bg.style.setProperty('--bg-image', `url("${imgUrl}")`);
+    } else if (currentStyle === 'preset') {
+      bg.dataset.style = 'default';
     } else if (currentStyle === 'gradient') {
       bg.dataset.style = 'gradient';
     } else {
@@ -105,7 +107,10 @@
       d.appendChild(img);
       d.addEventListener('click', () => {
         $('#bgUrl').value = presetRef(name);
-        document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'image'));
+        document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'preset'));
+        settings.backgroundImage = presetRef(name);
+        settings.backgroundStyle = 'preset';
+        toggleBgFields();
         applyBgPreview();
         updatePreview();
         markActivePreset();
@@ -306,8 +311,24 @@
     });
   }
 
+  function toggleBgFields() {
+    const style = (document.querySelector('.seg-btn.active') || {}).dataset?.bg || 'default';
+    const imageField = document.getElementById('imageSourceField');
+    const presetField = document.getElementById('presetField');
+    const preview = document.getElementById('bgPreview');
+    const hint = document.getElementById('bgHint');
+    if (imageField) imageField.style.display = style === 'image' ? '' : 'none';
+    if (presetField) presetField.style.display = style === 'preset' ? '' : 'none';
+    // 预览仅在“自定义图片”下显示；预设壁纸只显示缩略图网格
+    if (preview) {
+      if (style === 'image') preview.classList.remove('hidden');
+      else preview.classList.add('hidden');
+    }
+    if (hint) hint.style.display = (style === 'image' || style === 'preset') ? '' : 'none';
+  }
   function load() {
-    const seg = settings.backgroundStyle === 'image' ? 'image'
+    const seg = settings.backgroundStyle === 'preset' ? 'preset'
+              : settings.backgroundStyle === 'image' ? 'image'
               : settings.backgroundStyle === 'gradient' ? 'gradient' : 'default';
     document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === seg));
     $('#bgUrl').value = settings.backgroundImage || '';
@@ -327,12 +348,14 @@
     applyCardWidthPreview();
     updatePreview();
     markActivePreset();
+    toggleBgFields();
   }
   function updatePreview() {
     const preview = $('#bgPreview');
     const img = $('#previewImg');
+    const style = (document.querySelector('.seg-btn.active') || {}).dataset?.bg || 'default';
     const raw = $('#bgUrl').value.trim();
-    if (!raw) {
+    if (style !== 'image' || !raw) {
       preview.classList.add('hidden');
       return;
     }
@@ -353,6 +376,15 @@
       b.addEventListener('click', () => {
         document.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
         b.classList.add('active');
+        if (b.dataset.bg !== 'image' && b.dataset.bg !== 'preset') {
+          settings.backgroundImage = '';
+        }
+        if (b.dataset.bg === 'preset') {
+          // 切换到预设壁纸：若已有预设选择则应用，否则等用户点缩略图
+          const active = document.querySelector('#presetGrid .preset.active');
+          if (active) { settings.backgroundImage = presetRef(active.dataset.name); }
+        }
+        toggleBgFields();
         applyBgPreview();
       });
     });

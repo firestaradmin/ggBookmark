@@ -111,10 +111,11 @@
             <div class="seg">
               <button data-bg="default" class="seg-btn">渐变</button>
               <button data-bg="gradient" class="seg-btn">深色渐变</button>
+              <button data-bg="preset" class="seg-btn">预设壁纸</button>
               <button data-bg="image" class="seg-btn">自定义图片</button>
             </div>
           </div>
-          <div class="field">
+          <div class="field" id="imageSourceField">
             <label>图片来源</label>
             <input id="bgUrl" type="text" placeholder="https://... 网络图片 URL">
             <label class="btn icon-btn" title="本地上传">
@@ -127,11 +128,11 @@
             <img id="previewImg" alt="预览">
             <button class="btn danger btn-sm" id="bgClear">清除</button>
           </div>
-          <div class="hint">支持 JPG/PNG/WebP 链接或本地上传。选择“自定义图片”后点击“应用”。</div>
-          <div class="field col">
+          <div class="field col" id="presetField">
             <label>预设壁纸</label>
             <div class="preset-grid" id="presetGrid"></div>
           </div>
+          <div class="hint" id="bgHint">选择“自定义图片”或“预设壁纸”后，点击下方缩略图即可应用。</div>
           <div class="field">
             <label>模糊程度</label>
             <input id="bgBlur" type="range" min="0" max="40" step="1">

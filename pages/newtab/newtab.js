@@ -59,7 +59,7 @@
   function applyBg() {
     const bg = $('.gg-bg');
     const s = state.settings;
-    const hasImage = s.backgroundStyle === 'image' && s.backgroundImage;
+    const hasImage = (s.backgroundStyle === 'image' || s.backgroundStyle === 'preset') && s.backgroundImage;
     bg.dataset.style = hasImage ? 'image' : (s.backgroundStyle === 'gradient' ? 'gradient' : 'default');
     bg.style.setProperty('--bg-image', `url("${resolveBgImage(s.backgroundImage)}")`);
     bg.style.setProperty('--bg-blur', `${s.backgroundBlur || 0}px`);
