@@ -62,6 +62,40 @@
   min-width: 200px;
 }
 .field input:focus, .field select:focus { border-color: var(--accent); }
+.field input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  flex: 1; min-width: 200px;
+  height: 6px;
+  background: var(--glass-strong);
+  border-radius: 3px;
+  border: 1px solid var(--glass-border);
+  padding: 0;
+  cursor: pointer;
+}
+.field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: 2px solid #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+.field input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: 2px solid #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+.range-val {
+  font-size: 12px;
+  color: var(--text-dim);
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .field.actions { gap: 10px; }
 .hint {
   font-size: 12px;
@@ -113,6 +147,22 @@
   cursor: pointer;
 }
 .cb input { accent-color: var(--accent); width: 16px; height: 16px; }
+.btn-sm { padding: 6px 10px; font-size: 12px; }
+.btn.icon-btn label { cursor: pointer; padding: 8px 10px; display: inline-flex; align-items: center; justify-content: center; }
+.preview {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  text-align: center;
+}
+.preview img {
+  max-width: 100%; max-height: 180px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.preview .btn-sm { margin-top: 8px; }
 .footer {
   margin-top: 24px;
   padding-top: 18px;

@@ -37,23 +37,55 @@ body {
   min-height: 100vh;
 }
 
-/* Background rendering based on style */
+/* Background rendering based on style.
+   IMPORTANT: z-index must be 0 (not -1). On Firefox new-tab-override pages a
+   `position:fixed; z-index:-1` layer is painted behind the browser's viewport
+   background and therefore hidden. The fixed layer at z-index:0 sits above the
+   viewport background and the page content (z-index:1) paints above it. */
 .gg-bg {
   position: fixed;
   inset: 0;
-  z-index: -1;
-  background: var(--bg-base);
+  z-index: 0;
+  background-color: var(--bg-base);
   background-image: var(--bg-default);
-  transition: background .3s ease;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+}
+/* Page content must paint above the background layer */
+.topbar,
+main,
+.shell,
+header,
+.layout,
+.overlay{
+  position: relative;
+  z-index: 1;
 }
 .gg-bg[data-style="gradient"] {
   background-image: linear-gradient(135deg, #141b2d 0%, #1d2740 50%, #0f1a2e 100%);
+  filter: none;
+}
+/* To prevent transparent edges from the blur filter, enlarge the image a bit
+   (scaling the fixed element itself can break its stacking/painting). */
+.gg-bg[data-style="image"],
+.gg-bg[data-style="image"]::after {
+  background-repeat: no-repeat;
+  background-size: calc(100% + 48px);
+  background-position: center;
 }
 .gg-bg[data-style="image"] {
-  background-image: linear-gradient(rgba(8, 13, 26, 0.55), rgba(8, 13, 26, 0.65)),
-    var(--bg-image);
-  background-size: cover;
-  background-position: center;
+  background-color: var(--bg-base);
+  background-image: var(--bg-image);
+  filter: blur(var(--bg-blur, 0px)) saturate(120%);
+}
+.gg-bg[data-style="image"]::after {
+  /* dark overlay on top of the (blurred) image to keep text readable */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: rgba(8, 13, 26, var(--bg-dim, 0.35));
 }
 
 /* Custom scrollbar */

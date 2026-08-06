@@ -24,6 +24,7 @@
 
     <div class="actions">
       <button class="btn icon-btn" id="btnUndo" title="撤回" disabled></button>
+      <button class="btn icon-btn" id="btnFitAll" title="自动适应：所有卡片根据子项数量调整高度"></button>
       <button class="btn icon-btn" id="btnOrganize" title="整理书签"></button>
       <button class="btn icon-btn" id="btnSettings" title="设置"></button>
       <button class="btn icon-btn" id="btnAddCard" title="卡片添加：添加一个分类卡片"></button>
@@ -59,10 +60,12 @@
       <header class="card-head">
         <span class="card-drag" draggable="true" title="拖动标题可调整分类顺序"></span>
         <h2 class="card-title"></h2>
+        <button class="card-fit btn icon-btn" title="自动适应：根据子项数量调整高度"></button>
         <button class="card-more btn icon-btn" title="卡片设置"></button>
         <div class="card-menu menu glass"></div>
       </header>
       <ul class="card-body"></ul>
+      <div class="card-resize" title="拖动右下角调整卡片大小"></div>
     </section>
   </template>
 

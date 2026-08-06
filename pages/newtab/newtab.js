@@ -14,6 +14,7 @@
   };
 
   let cardOrder = [];     // persisted order of {appId} among current category
+  let colWidth = 320;     // global card column width (px), set in settings
 
   // ---------- DOM ----------
   const $ = (s) => document.querySelector(s);
@@ -32,6 +33,7 @@
     state.activeCategory = data.activeCat || (state.categories[0] && state.categories[0].id) || null;
     const byCat = data.orderByCat || {};
     cardOrder = byCat[state.activeCategory] || [];
+    colWidth = state.settings.cardWidth || 320;
   }
 
   async function persist() {
@@ -49,12 +51,15 @@
   // ---------- Background image ----------
   function applyBg() {
     const bg = $('.gg-bg');
-    bg.dataset.style = state.settings.backgroundStyle === 'image' && state.settings.backgroundImage
-      ? 'image' : (state.settings.backgroundStyle === 'gradient' ? 'gradient' : 'default');
-    bg.style.setProperty('--bg-image', `url("${state.settings.backgroundImage}")`);
-    document.documentElement.style.setProperty('--accent-color', state.settings.accentColor);
-    document.documentElement.style.setProperty('--accent', state.settings.accentColor);
-    document.documentElement.style.setProperty('--accent-2', state.settings.accentColor);
+    const s = state.settings;
+    const hasImage = s.backgroundStyle === 'image' && s.backgroundImage;
+    bg.dataset.style = hasImage ? 'image' : (s.backgroundStyle === 'gradient' ? 'gradient' : 'default');
+    bg.style.setProperty('--bg-image', `url("${s.backgroundImage}")`);
+    bg.style.setProperty('--bg-blur', `${s.backgroundBlur || 0}px`);
+    bg.style.setProperty('--bg-dim', `${s.backgroundDim ?? 0.35}`);
+    document.documentElement.style.setProperty('--accent-color', s.accentColor);
+    document.documentElement.style.setProperty('--accent', s.accentColor);
+    document.documentElement.style.setProperty('--accent-2', s.accentColor);
   }
 
   // ---------- Search ----------
@@ -263,19 +268,49 @@
     const cards = reorderCards();
     grid.innerHTML = '';
     const tpl = $('#cardTpl');
-    cards.forEach((app) => {
+    const cols = computedColumnCount();
+    // build column wrappers
+    const colEls = [];
+    for (let i = 0; i < cols; i++) {
+      const c = document.createElement('div');
+      c.className = 'grid-col';
+      c.dataset.col = i;
+      colEls.push(c);
+      grid.appendChild(c);
+    }
+    // distribute cards round-robin so each column holds a vertical stack
+    cards.forEach((app, idx) => {
       const card = tpl.content.cloneNode(true).querySelector('.card');
       card.dataset.appId = app.id;
       card.dataset.folderId = app.folderId;
       card.dataset.recursive = app.recursive ? '1' : '0';
       card.querySelector('.card-title').textContent = app.title;
-      card.querySelector('.card-body').dataset.appId = app.id;
+      const body = card.querySelector('.card-body');
+      body.dataset.appId = app.id;
+      // per-card body height: 'auto' = fit all children
+      const fit = app.fitMode === 'auto';
+      if (fit) body.dataset.fit = 'auto';
+      else if (app.bodyH) body.style.setProperty('--card-body-h', app.bodyH + 'px');
       setupCardMenu(card, app);
       setupCardDrag(card, app);
       buildTiles(card, app.folderId, app.recursive);
       // apply exclusions
       applyExclusions(card, app);
-      grid.appendChild(card);
+      // resize handle (vertical only)
+      setupCardResize(card, app);
+      // fit button
+      const fitBtn = card.querySelector('.card-fit');
+      fitBtn.innerHTML = GG.icon('fit');
+      fitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
+        persist();
+        renderCards();
+      });
+      // compact mode (auto or user-set) - computed after tiles exist
+      applyCompact(card, app);
+      const targetCol = idx % cols;
+      colEls[targetCol].appendChild(card);
     });
     if (cards.length) grid.dataset.empty = 'false'; else grid.dataset.empty = 'true';
   }
@@ -287,6 +322,91 @@
       const t = body.querySelector(`.tile[data-url="${CSS.escape(url)}"]`);
       if (t) t.remove();
     });
+  }
+
+  // Compact mode: when a card's body is short, tiles collapse to a single row
+  // (title + domain on one line) with a smaller icon.
+  // app.compact: undefined = auto-detect, true/false = user override.
+  function applyCompact(card, app) {
+    const verbosePerTile = 44;
+    let compact = app.compact;
+    if (compact === undefined) {
+      const body = card.querySelector('.card-body');
+      const tileCount = body.querySelectorAll('.tile').length || 1;
+      const bodyH = app.fitMode === 'auto'
+        ? Math.max(body.scrollHeight, body.clientHeight)
+        : (app.bodyH || body.clientHeight);
+      compact = (bodyH / tileCount) < verbosePerTile && bodyH > 0;
+    }
+    card.classList.toggle('compact', !!compact);
+  }
+
+  // Live recompute during resize; only reflects DOM, does not persist pref.
+  function recomputeCompact(card, app) {
+    if (app.compact !== undefined) return; // user override wins
+    const verbosePerTile = 44;
+    const body = card.querySelector('.card-body');
+    const tileCount = body.querySelectorAll('.tile').length || 1;
+    const bodyH = app.fitMode === 'auto' ? body.scrollHeight : (app.bodyH || body.clientHeight);
+    const compact = (bodyH / tileCount) < verbosePerTile && bodyH > 0;
+    card.classList.toggle('compact', !!compact);
+  }
+
+  // ---------- Card resize (corner drag, vertical only) ----------
+  // Vertical drag -> this card's body height.
+  // Column width is controlled globally in settings.
+  function setupCardResize(card, app) {
+    const handle = card.querySelector('.card-resize');
+    // vertical-only cursor is handled via CSS
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startY = e.clientY;
+      const startH = app.fitMode === 'auto'
+        ? Math.max(card.querySelector('.card-body').offsetHeight, card.querySelector('.card-body').scrollHeight)
+        : (app.bodyH || 360);
+      let moved = false;
+      app.fitMode = 'fixed';
+
+      const onMove = (ev) => {
+        moved = true;
+        const dy = ev.clientY - startY;
+        const newH = Math.max(120, Math.round(startH + dy));
+        app.bodyH = newH;
+        const body = card.querySelector('.card-body');
+        body.style.setProperty('--card-body-h', newH + 'px');
+        body.dataset.fit = '';
+        recomputeCompact(card, app);
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (moved) { persist(); recomputeCompact(card, app); }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  // Number of columns based on the global column width setting
+  function computedColumnCount() {
+    const gap = 18;
+    const w = grid.clientWidth || document.body.clientWidth || 900;
+    const cw = colWidth || 320;
+    return Math.max(1, Math.min(Math.floor((w + gap) / (cw + gap)), 6));
+  }
+
+  // Set every card to auto-fit (height expands to show all children)
+  function fitAllCards() {
+    state.apps.forEach((a) => {
+      if (a.categoryId === state.activeCategory) {
+        a.fitMode = 'auto';
+        a.compact = false;
+      }
+    });
+    persist();
+    renderCards();
+    GG.toast.show('已按子项数量调整所有卡片高度', 'success');
   }
 
   function setupCardMenu(card, app) {
@@ -303,8 +423,19 @@
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
     add('包含子文件夹', 'folderPlus', () => { app.recursive = !app.recursive; persist(); renderCards(); });
+    add(app.fitMode === 'auto' ? '固定高度（垂直拖动调整）' : '自动适应全部子项', 'fit', () => {
+      app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
+      persist(); renderCards();
+    });
+    const compactState = app.compact === undefined ? '自动' : (app.compact ? '开启' : '关闭');
+    add(`紧凑模式：${compactState}（点击切换）`, 'expand', () => {
+      // cycle: undefined(auto) -> true -> false -> undefined
+      app.compact = app.compact === undefined ? true : (app.compact ? false : undefined);
+      persist(); renderCards();
+    });
     add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim()) { app.title = n.trim(); persist(); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
+    more.innerHTML = GG.icon('settings');
     more.addEventListener('click', (e) => { e.stopPropagation(); openMenu(menu, more); });
   }
 
@@ -534,6 +665,9 @@
   function wireButtons() {
     $('#btnUndo').addEventListener('click', undo);
     $('#btnUndo').innerHTML = GG.icon('undo');
+    const btnFitAll = $('#btnFitAll');
+    btnFitAll.innerHTML = GG.icon('fit');
+    btnFitAll.addEventListener('click', fitAllCards);
     $('#btnSettings').innerHTML = GG.icon('settings');
     $('#btnSettings').addEventListener('click', () => browser.runtime.openOptionsPage());
     const btnOrg = $('#btnOrganize');
@@ -607,9 +741,12 @@
     // listen for settings changes from settings page
     browser.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes.settings) {
+        const prevWidth = colWidth;
         state.settings = Object.assign({}, GG.DEFAULTS, changes.settings.newValue || {});
+        colWidth = state.settings.cardWidth || 320;
         applyBg();
         renderSearchEngine();
+        if (prevWidth !== colWidth) renderCards();  // rebalance columns
       }
     });
     // open menu close
