@@ -27,6 +27,11 @@
 
 .hidden { display: none !important; }
 
+/* 字体大小设置：作用于主界面主要文本 */
+html[data-font-size="small"] { font-size: 13px; }
+html[data-font-size="medium"] { font-size: 15px; }
+html[data-font-size="large"] { font-size: 17px; }
+
 html, body {
   margin: 0;
   padding: 0;

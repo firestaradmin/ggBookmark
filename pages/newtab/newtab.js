@@ -67,6 +67,7 @@
     document.documentElement.style.setProperty('--accent-color', s.accentColor);
     document.documentElement.style.setProperty('--accent', s.accentColor);
     document.documentElement.style.setProperty('--accent-2', s.accentColor);
+    document.documentElement.dataset.fontSize = s.fontSize || 'medium';
   }
 
   // ---------- Search ----------

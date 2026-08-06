@@ -344,6 +344,7 @@
     buildImportFolderSelect();
     document.documentElement.style.setProperty('--accent', settings.accentColor);
     document.documentElement.style.setProperty('--accent-2', settings.accentColor);
+    document.documentElement.dataset.fontSize = settings.fontSize || 'medium';
     applyBgPreview();
     applyCardWidthPreview();
     updatePreview();
@@ -456,19 +457,21 @@
       GG.toast.show('设置已保存', 'success');
     });
 
-    $('#btnResetBg').addEventListener('click', async () => {
-      settings.backgroundImage = '';
-      settings.backgroundStyle = 'default';
-      settings.backgroundBlur = 0;
-      settings.backgroundDim = 0.35;
-      $('#bgUrl').value = '';
-      $('#bgBlur').value = 0;
-      $('#bgDim').value = 0.35;
-      document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'default'));
-      applyBgPreview();
-      await GG.saveSettings(settings);
-      GG.toast.show('已重置背景', 'success');
-    });
+    if ($('#btnResetBg')) {
+      $('#btnResetBg').addEventListener('click', async () => {
+        settings.backgroundImage = '';
+        settings.backgroundStyle = 'default';
+        settings.backgroundBlur = 0;
+        settings.backgroundDim = 0.35;
+        $('#bgUrl').value = '';
+        $('#bgBlur').value = 0;
+        $('#bgDim').value = 0.35;
+        document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'default'));
+        applyBgPreview();
+        await GG.saveSettings(settings);
+        GG.toast.show('已重置背景', 'success');
+      });
+    }
 
     // 导出配置为 JSON 文件（不含壁纸图片数据，但包含主页面卡片配置与全部书签）
     $('#btnExport').addEventListener('click', async () => {

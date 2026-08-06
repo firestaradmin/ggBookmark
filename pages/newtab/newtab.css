@@ -703,3 +703,18 @@
 .nt-settings .field { gap: 10px; }
 .nt-settings .footer { text-align: right; padding-top: 12px; }
 
+/* 字体大小设置：small / medium / large 缩放主界面主要文本 */
+html[data-font-size="small"] .card-title,
+html[data-font-size="small"] .tile-title { font-size: 13px; }
+html[data-font-size="small"] .tile-desc,
+html[data-font-size="small"] .tile-empty,
+html[data-font-size="small"] .card-title-edit { font-size: 10.5px; }
+html[data-font-size="small"] .cat-name { font-size: 13px; }
+
+html[data-font-size="large"] .card-title,
+html[data-font-size="large"] .tile-title { font-size: 18px; }
+html[data-font-size="large"] .tile-desc,
+html[data-font-size="large"] .tile-empty,
+html[data-font-size="large"] .card-title-edit { font-size: 14px; }
+html[data-font-size="large"] .cat-name { font-size: 17px; }
+
