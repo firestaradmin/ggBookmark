@@ -653,6 +653,49 @@
       b.classList.toggle('selected', b.dataset.val === f);
     });
   }
+  // 书签导入文件夹：下拉填充 + 选择/清除时即时保存到 storage
+  async function wireImportFolder() {
+    const sel = document.getElementById('importFolderSelect');
+    if (!sel) return;
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '（每次导入时手动选择）';
+    sel.appendChild(placeholder);
+
+    try {
+      const tree = await browser.bookmarks.getTree();
+      const roots = (tree[0] && tree[0].children) || [];
+      (function walk(nodes, depth) {
+        for (const n of nodes) {
+          if (n.type === 'folder') {
+            const opt = document.createElement('option');
+            opt.value = n.id;
+            opt.textContent = '　'.repeat(depth) + n.title;
+            sel.appendChild(opt);
+            if (n.children) walk(n.children, depth + 1);
+          }
+        }
+      })(roots, 0);
+    } catch (e) { /* ignore */ }
+
+    const saved = await browser.storage.local.get('settings');
+    sel.value = (saved.settings && saved.settings.bookmarkImportFolder) || '';
+
+    sel.addEventListener('change', () => {
+      const folder = sel.value || '';
+      state.settings.bookmarkImportFolder = folder;
+      GG.saveSettings(state.settings);
+      GG.toast.show(folder ? '已记住书签导入文件夹' : '已清除默认导入文件夹', folder ? 'success' : 'info');
+    });
+    const clearBtn = document.getElementById('btnClearImportFolder');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      sel.value = '';
+      state.settings.bookmarkImportFolder = '';
+      GG.saveSettings(state.settings);
+      GG.toast.show('已清除默认导入文件夹', 'info');
+    });
+  }
+
   function wireViewMenu() {
     const btn = $('#btnView');
     const menu = $('#viewMenu');
@@ -1147,7 +1190,6 @@
 
   // ---------- Buttons ----------
   function wireButtons() {
-    $('#btnUndo').addEventListener('click', undo);
     $('#btnUndo').innerHTML = GG.icon('undo');
     wireViewMenu();
     syncViewBtn();
@@ -1230,6 +1272,7 @@
     applyBg();
     renderSearchEngine();
     wireButtons();
+    wireImportFolder();
     enableGridDrag();
     enableColumnDrop();
     // close menus on outside click / scroll / escape

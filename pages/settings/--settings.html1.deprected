@@ -84,6 +84,14 @@
 
     <section class="group">
       <h2>数据</h2>
+      <div class="field col">
+        <label>书签导入文件夹</label>
+        <div style="display:flex; gap:10px; align-items:center; width:100%;">
+          <select id="importFolderSelect" style="flex:1;"></select>
+          <button class="btn ghost" id="btnClearImportFolder">清除</button>
+        </div>
+        <div class="hint">设置后，下次导入配置时将自动把书签导入此文件夹，不再每次手动选择。</div>
+      </div>
       <div class="field actions">
         <button class="btn" id="btnResetBg">重置背景</button>
       </div>

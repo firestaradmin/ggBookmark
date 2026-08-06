@@ -267,6 +267,32 @@
       overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
     });
   }
+  // 构建“书签导入文件夹”下拉，列出全部文件夹并显示当前默认设置
+  async function buildImportFolderSelect() {
+    const sel = $('#importFolderSelect');
+    if (!sel) return;
+    sel.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '（每次导入时手动选择）';
+    sel.appendChild(placeholder);
+
+    const tree = await browser.bookmarks.getTree();
+    const roots = (tree[0] && tree[0].children) || [];
+    (function walk(nodes, depth) {
+      for (const n of nodes) {
+        if (n.type === 'folder') {
+          const opt = document.createElement('option');
+          opt.value = n.id;
+          opt.textContent = '　'.repeat(depth) + n.title;
+          sel.appendChild(opt);
+          if (n.children) walk(n.children, depth + 1);
+        }
+      }
+    })(roots, 0);
+
+    sel.value = settings.bookmarkImportFolder || '';
+  }
   // 根据旧 id 映射到新创建的文件夹 id（按路径匹配）
   function remapFolderIds(apps, idToPath, newPathToId) {
     const remap = {};
@@ -294,6 +320,7 @@
     $('#fontSize').value = settings.fontSize || 'medium';
     buildColors();
     buildPresets();
+    buildImportFolderSelect();
     document.documentElement.style.setProperty('--accent', settings.accentColor);
     document.documentElement.style.setProperty('--accent-2', settings.accentColor);
     applyBgPreview();
@@ -359,6 +386,22 @@
         markActivePreset();
       });
     }
+    if ($('#btnClearImportFolder')) {
+      $('#btnClearImportFolder').addEventListener('click', () => {
+        $('#importFolderSelect').value = '';
+        settings.bookmarkImportFolder = '';
+        GG.saveSettings(settings);
+        GG.toast.show('已清除默认导入文件夹', 'info');
+      });
+    }
+    // 选择导入文件夹后即时保存，避免忘记点“保存设置”导致不生效
+    if ($('#importFolderSelect')) {
+      $('#importFolderSelect').addEventListener('change', () => {
+        settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
+        GG.saveSettings(settings);
+        GG.toast.show('已记住书签导入文件夹', 'success');
+      });
+    }
     $('#cardWidth').addEventListener('input', applyCardWidthPreview);
     $('#bgApply').addEventListener('click', () => {
       document.querySelector('[data-bg="image"]').click();
@@ -374,6 +417,7 @@
       settings.searchEngine = $('#seSelect').value;
       settings.showDescriptions = $('#showDesc').checked;
       settings.fontSize = $('#fontSize').value;
+      settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
       const activeDot = document.querySelector('.color-dot.active');
       if (activeDot) settings.accentColor = activeDot.dataset.color;
       await GG.saveSettings(settings);
@@ -446,7 +490,12 @@
         // 读取当前壁纸，导入文件未携带壁纸时不覆盖
         const current = await browser.storage.local.get('settings');
         const currentBg = (current.settings || {}).backgroundImage || '';
+        // 保留已保存的“书签导入文件夹”，不被导入的配置覆盖（导入文件通常不含该字段）
+        const savedImportFolder = (current.settings || {}).bookmarkImportFolder || '';
         const importedSettings = Object.assign({}, GG.DEFAULTS, imported.settings || {});
+        if (!imported.settings || !imported.settings.bookmarkImportFolder) {
+          importedSettings.bookmarkImportFolder = savedImportFolder;
+        }
         if (!importedSettings.backgroundImage) importedSettings.backgroundImage = currentBg;
 
         let apps = imported.apps || [];
@@ -462,7 +511,13 @@
           }
           if (!skipBookmarks) {
             try {
-              const target = await pickBookmarkFolder();
+              // 优先使用配置文件里记录的导入文件夹；其次用本地保存的设置；都没有才询问用户
+              const importFolder = importedSettings.bookmarkImportFolder
+                || (await browser.storage.local.get('settings')).settings?.bookmarkImportFolder
+                || '';
+              const target = importFolder
+                ? importFolder
+                : await pickBookmarkFolder();
               if (target == null) {
                 skipBookmarks = true;
                 GG.toast.show('已取消书签导入，仅导入设置与卡片', 'info');
