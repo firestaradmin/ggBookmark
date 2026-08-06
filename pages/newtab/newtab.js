@@ -228,14 +228,16 @@
       tile.dataset.title = bm.title || bm.url;
 
       tile.addEventListener('click', (e) => {
-        if (e.target.closest('.tile-more') || e.target.closest('.tile-menu')) return;
+        if (e.target.closest('.tile-more')) return;
         browser.tabs.create({ url: bm.url });
       });
 
-      const more = tile.querySelector('.tile-more');
-      const menu = tile.querySelector('.tile-menu');
-      more.addEventListener('click', (e) => { e.stopPropagation(); openMenu(menu, more); });
-      buildTileMenu(menu, tile, bm, card);
+      tile.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openTileMenu(e.clientX, e.clientY, tile, bm, card);
+      });
+
       body.appendChild(tile);
     });
     // shortcut & empty note
@@ -252,7 +254,7 @@
   }
 
   function openMenu(menu, anchor) {
-    document.querySelectorAll('.tile-menu.open, .card-menu.open').forEach((m) => {
+    document.querySelectorAll('.card-menu.open').forEach((m) => {
       m.classList.remove('open');
       m.closest('.card')?.classList.remove('menu-open');
     });
@@ -268,27 +270,37 @@
     setTimeout(() => document.addEventListener('click', close), 0);
   }
 
-  function buildTileMenu(menu, tile, bm, card) {
-    menu.innerHTML = '';
+  function openTileMenu(x, y, tile, bm, card) {
+    closeTileMenu();
+    const menu = document.createElement('div');
+    menu.className = 'menu glass tile-ctx';
     const add = (label, ic, handler, danger) => {
       const b = document.createElement('button');
       b.className = 'menu-item' + (danger ? ' danger' : '');
       b.innerHTML = GG.icon(ic) + '<span></span>';
       b.querySelector('span').textContent = label;
-      b.addEventListener('click', () => { menu.classList.remove('open'); menu.closest('.card')?.classList.remove('menu-open'); handler(); });
+      b.addEventListener('click', () => { closeTileMenu(); handler(); });
       menu.appendChild(b);
     };
     add('打开', 'external', () => browser.tabs.create({ url: bm.url }));
     add('复制链接', 'external', () => navigator.clipboard.writeText(bm.url).then(() => GG.toast.show('已复制链接', 'success')));
     add('移出卡片', 'backspace', () => removeTile(tile, bm, card));
     add('删除书签', 'trash', () => deleteBookmark(tile, bm, card), true);
+    document.body.appendChild(menu);
+    tileMenuEl = menu;
+    menu.style.left = Math.min(x, window.innerWidth - menu.offsetWidth - 8) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - menu.offsetHeight - 8) + 'px';
+  }
+
+  let tileMenuEl = null;
+  function closeTileMenu() {
+    if (tileMenuEl) { tileMenuEl.remove(); tileMenuEl = null; }
   }
 
   function removeTile(tile, bm, card) {
     tile.remove();
     const app = state.apps.find((a) => a.id === card.dataset.appId && a.folderId === card.dataset.folderId);
     if (app) {
-      // mark hidden bookmark urls in categories to exclude
       ensureExclusions(app, bm.url);
       GG.toast.show('已隐藏此书签', 'success');
     }
@@ -780,6 +792,7 @@
   function enableGridDrag() {
     grid.addEventListener('dragstart', (e) => {
       const tile = e.target.closest('.tile');
+      if (tile && !e.target.closest('.tile-more')) { e.preventDefault(); return; }
       if (tile) {
         e.dataTransfer.setData('bookmark-id', tile.dataset.bookmarkId);
         e.dataTransfer.setData('from-folder', tile.closest('.card').dataset.folderId);
@@ -1107,9 +1120,12 @@
       const menu = $('#seMenu');
       if (!e.target.closest('#seIcon') && !e.target.closest('#seMenu')) menu.classList.remove('open');
       if (!e.target.closest('.cat-ctx')) closeCatMenu();
+      if (!e.target.closest('.tile-ctx')) closeTileMenu();
     });
     document.addEventListener('contextmenu', (e) => {
       if (!e.target.closest('.cat')) closeCatMenu();
+      if (!e.target.closest('.tile')) closeTileMenu();
+      e.preventDefault();
     });
     grid.addEventListener('contextmenu', (e) => {
       if (e.target.closest('.card')) return; // let card handle its own (none) / default
@@ -1118,7 +1134,8 @@
     });
     document.addEventListener('click', (e) => { if (!e.target.closest('.grid-ctx')) closeGridMenu(); });
     document.addEventListener('scroll', closeCatMenu, true);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatMenu(); closeGridMenu(); } });
+    document.addEventListener('scroll', closeTileMenu, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatMenu(); closeGridMenu(); closeTileMenu(); } });
     renderAll();
 
     // listen for settings changes from settings page

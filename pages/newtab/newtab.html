@@ -58,14 +58,13 @@
 
   <!-- Template -->
   <template id="bookmarkTileTpl">
-    <li class="tile" draggable="true">
+    <li class="tile" draggable="false">
       <div class="tile-icon" data-action="open"></div>
       <div class="tile-body" data-action="open">
         <div class="tile-title"></div>
         <div class="tile-desc"></div>
       </div>
-      <div class="tile-more" tabindex="0" role="button" title="更多"></div>
-      <div class="tile-menu menu glass"></div>
+      <div class="tile-more" tabindex="0" role="button" title="拖动" draggable="true"></div>
     </li>
   </template>
 
