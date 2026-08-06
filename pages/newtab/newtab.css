@@ -353,6 +353,12 @@
   -webkit-backdrop-filter: blur(24px) saturate(140%);
 }
 .card-menu.open { display: block; }
+.card-menu.left {
+  left: auto;
+  right: 0;
+  margin-left: 0;
+  margin-right: 8px;
+}
 
 .card-body {
   list-style: none;

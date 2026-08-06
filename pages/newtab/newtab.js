@@ -258,8 +258,13 @@
       m.classList.remove('open');
       m.closest('.card')?.classList.remove('menu-open');
     });
+    // Decide whether to open to the left (when the card sits near the right edge)
+    menu.classList.remove('left');
     menu.classList.add('open');
     menu.closest('.card')?.classList.add('menu-open');
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 8) menu.classList.add('left');
+    else menu.classList.remove('left');
     const close = (e) => {
       if (!menu.contains(e.target) && e.target !== anchor) {
         menu.classList.remove('open');
