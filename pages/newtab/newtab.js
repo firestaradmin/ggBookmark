@@ -28,7 +28,7 @@
     state.apps = data.apps || [];
     state.categories = data.categories || [];
     if (!state.categories.length) {
-      state.categories = [{ id: 'cat0', name: '导航精品' }, { id: 'cat1', name: '投资' }, { id: 'cat2', name: '系统' }];
+      state.categories = [{ id: 'cat0', name: '主要' }, { id: 'cat1', name: '工具' }, { id: 'cat2', name: '游戏' }];
     }
     state.activeCategory = data.activeCat || (state.categories[0] && state.categories[0].id) || null;
     const byCat = data.orderByCat || {};

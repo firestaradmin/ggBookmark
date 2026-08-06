@@ -73,12 +73,14 @@ header,
 .gg-bg[data-style="image"],
 .gg-bg[data-style="image"]::after {
   background-repeat: no-repeat;
-  background-size: calc(100% + 48px);
+  background-size: cover;
   background-position: center;
 }
 .gg-bg[data-style="image"] {
   background-color: var(--bg-base);
   background-image: var(--bg-image);
+  /* scale up slightly so the blur filter doesn't reveal transparent edges */
+  transform: scale(1.06);
   filter: blur(var(--bg-blur, 0px)) saturate(120%);
 }
 .gg-bg[data-style="image"]::after {
