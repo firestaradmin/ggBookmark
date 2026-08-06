@@ -830,7 +830,6 @@
     $('#pickerClose').addEventListener('click', closePicker);
     $('#pickerConfirm').addEventListener('click', confirmPick);
     // search
-    $('#sePick').textContent = '▾';
     $('#seGo').addEventListener('click', doSearch);
     $('#searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
     $('#seIcon').addEventListener('click', () => {
