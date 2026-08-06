@@ -5,6 +5,25 @@
   const ACCENTS = ['#4f7cff', '#7a5bff', '#00c6a7', '#ff7a59', '#f54d6a', '#ffb84d', '#4f9fff'];
   const $ = (s) => document.querySelector(s);
   let settings = {};
+  const PRESET_WALLPAPERS = [
+    'mojave_dynamic-14_scaled.webp',
+    'Scene_D_1.webp',
+    'vgoxxm.webp',
+    'wallhaven-1k6y7g_scaled.webp',
+    'wallhaven-1ko5xg.webp',
+    'wallhaven-7229oo.webp',
+    'wallhaven-83qyry.webp',
+    'wallhaven-9d17m1.webp',
+    'wallhaven-gp1977.webp',
+    'wallhaven-jxlk35.webp',
+    'wallhaven-kxov7q.webp',
+    'wallhaven-pkq3zp.webp',
+    'wallhaven-rrd6gj.webp',
+    'wallhaven-z8zd2j.webp'
+  ];
+  function presetURL(name) {
+    return browser.runtime.getURL('pics/wallpapers/' + name);
+  }
 
   function applyBgPreview() {
     const bg = $('.gg-bg');
@@ -58,6 +77,37 @@
     });
   }
 
+  function buildPresets() {
+    const grid = $('#presetGrid');
+    grid.innerHTML = '';
+    PRESET_WALLPAPERS.forEach((name) => {
+      const url = presetURL(name);
+      const d = document.createElement('div');
+      d.className = 'preset';
+      d.dataset.url = url;
+      d.title = name;
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = name;
+      img.loading = 'lazy';
+      d.appendChild(img);
+      d.addEventListener('click', () => {
+        $('#bgUrl').value = url;
+        document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'image'));
+        applyBgPreview();
+        updatePreview();
+        markActivePreset();
+      });
+      grid.appendChild(d);
+    });
+  }
+  function markActivePreset() {
+    const current = $('#bgUrl').value.trim();
+    document.querySelectorAll('#presetGrid .preset').forEach((p) => {
+      p.classList.toggle('active', p.dataset.url === current);
+    });
+  }
+
   function load() {
     const seg = settings.backgroundStyle === 'image' ? 'image'
               : settings.backgroundStyle === 'gradient' ? 'gradient' : 'default';
@@ -71,11 +121,13 @@
     $('#showDesc').checked = settings.showDescriptions !== false;
     $('#fontSize').value = settings.fontSize || 'medium';
     buildColors();
+    buildPresets();
     document.documentElement.style.setProperty('--accent', settings.accentColor);
     document.documentElement.style.setProperty('--accent-2', settings.accentColor);
     applyBgPreview();
     applyCardWidthPreview();
     updatePreview();
+    markActivePreset();
   }
   function updatePreview() {
     const preview = $('#bgPreview');
@@ -106,6 +158,7 @@
     });
     $('#bgUrl').addEventListener('input', applyBgPreview);
     $('#bgUrl').addEventListener('input', updatePreview);
+    $('#bgUrl').addEventListener('input', markActivePreset);
     $('#bgBlur').addEventListener('input', applyBgPreview);
     $('#bgDim').addEventListener('input', applyBgPreview);
 
@@ -122,6 +175,7 @@
       });
       applyBgPreview();
       updatePreview();
+      markActivePreset();
     });
     if ($('#bgClear')) {
       $('#bgClear').addEventListener('click', () => {
@@ -129,6 +183,7 @@
         $('#bgFile').value = '';
         $('#bgPreview').classList.add('hidden');
         applyBgPreview();
+        markActivePreset();
       });
     }
     $('#cardWidth').addEventListener('input', applyCardWidthPreview);
