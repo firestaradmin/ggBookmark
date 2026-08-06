@@ -164,8 +164,9 @@
   width: 100%; outline: none; font-size: 13px; padding: 0;
 }
 .tree-row .tr-count { font-size: 11px; color: var(--text-faint); background: var(--glass); padding: 1px 7px; border-radius: 8px; flex-shrink: 0; }
-.tree-row .tr-more { opacity: 0; transition: opacity .14s ease; }
+.tree-row .tr-more { opacity: 0; transition: opacity .14s ease; padding: 0; box-sizing: border-box; justify-content: center; align-items: center; }
 .tree-row:hover .tr-more { opacity: 1; }
+.tree-row .tr-more svg { width: 16px; height: 16px; display: block; margin: auto; }
 .tree-children { margin-left: 14px; border-left: 1px dashed rgba(255,255,255,.08); padding-left: 4px; display: block; }
 .tree-children.collapsed { display: none; }
 .tree-row .tw-toggle {
@@ -173,8 +174,9 @@
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--text-dim);
   transition: transform .15s ease;
+  transform: rotate(90deg);
 }
-.tree-row .tw-toggle.collapsed { transform: rotate(-90deg); }
+.tree-row .tw-toggle.collapsed { transform: rotate(0deg); }
 .tree-row .tw-toggle-empty { width: 16px; height: 16px; flex-shrink: 0; }
 .tree-leaf { margin-left: 7px; }
 

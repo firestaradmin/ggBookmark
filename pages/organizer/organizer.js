@@ -37,6 +37,16 @@
     const roots = await browser.bookmarks.getTree();
     tree = roots[0].children || [];
     rebuildFolderCount();
+    // collapse folders at depth >= 2 (keep only the first two levels expanded)
+    const fold = (nodes, depth) => {
+      (nodes || []).forEach((n) => {
+        if (n.type === 'folder') {
+          if (depth >= 2) collapse.add(n.id);
+          fold(n.children, depth + 1);
+        }
+      });
+    };
+    fold(tree, 0);
     renderFolderTree();
   }
 
@@ -84,20 +94,23 @@
     row.style.paddingLeft = (8 + depth * 4) + 'px';
 
     const toggle = document.createElement('span');
-    toggle.className = 'tw-toggle' + (collapse.has(node.id) ? ' collapsed' : '');
-    toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
-    const setFolderIcon = () => { icon.innerHTML = collapse.has(node.id) ? GG.icon('folder') : GG.icon('folderOpen'); };
-    toggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (collapse.has(node.id)) collapse.delete(node.id); else collapse.add(node.id);
-      const sub = wrap.querySelector(':scope > .tree-children');
-      if (sub) sub.classList.toggle('collapsed', collapse.has(node.id));
-      setFolderIcon();
-    });
+    if (childFolders.length) {
+      toggle.className = 'tw-toggle' + (collapse.has(node.id) ? ' collapsed' : '');
+      toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (collapse.has(node.id)) collapse.delete(node.id); else collapse.add(node.id);
+        toggle.classList.toggle('collapsed', collapse.has(node.id));
+        const sub = wrap.querySelector(':scope > .tree-children');
+        if (sub) sub.classList.toggle('collapsed', collapse.has(node.id));
+      });
+    } else {
+      toggle.className = 'tw-toggle-empty';
+    }
 
     const icon = document.createElement('span');
     icon.className = 'tr-icon folder';
-    setFolderIcon();
+    icon.innerHTML = GG.icon('folder');
 
     const name = document.createElement('span');
     name.className = 'tr-name';
@@ -109,7 +122,7 @@
 
     const more = document.createElement('span');
     more.className = 'tr-more btn icon-btn';
-    more.innerHTML = GG.icon('settings');
+    more.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
     more.style.width = '24px'; more.style.height = '24px';
     more.addEventListener('click', (e) => { e.stopPropagation(); openFolderMenu(more, node); });
 
@@ -391,6 +404,31 @@
       if (sel.dragFromFolder && sel.dragFromFolder !== p.folderId && sel.dragIds.length) moveIdsTo(sel.dragIds, p.folderId);
       else if (sel.dragFromFolder === p.folderId && sel.dragIds.length) moveIdsToEndOfFolder(p);
     });
+    // right-click on empty panel space -> panel context menu
+    grid.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.item')) return; // items have their own menu
+      e.preventDefault();
+      activePanelId = p.id; markActivePanel(); renderTabs(); updateToolbar();
+      const folderNode = findFolderNode(p.folderId);
+      const items = [
+        { label: '在此新建文件夹', ic: 'folderPlus', fn: () => newFolder(p.folderId) },
+        { label: '刷新', ic: 'settings', fn: () => renderPanel(p) }
+      ];
+      if (folderNode) {
+        items.push({ label: '重命名当前文件夹', ic: 'settings', fn: () => promptRename(folderNode) });
+        items.push({ label: '删除当前文件夹', ic: 'trash', fn: () => deleteItem(folderNode), danger: true });
+      }
+      if (p.selection.size) items.push({ label: '清空选择', ic: 'backspace', fn: () => { p.selection.clear(); renderPanel(p); updateToolbar(); } });
+      items.push({ label: '关闭此面板', ic: 'external', fn: () => closePanel(p.id) });
+      openCtxMenu(e.clientX, e.clientY, items);
+    });
+  }
+
+  function findFolderNode(id) {
+    if (id === DEFAULT_ROOT) return null;
+    let found = null;
+    walkFolders(tree, (f) => { if (f.id === id) found = f; });
+    return found;
   }
 
   // === REORDER / MOVE / DELETE ===
