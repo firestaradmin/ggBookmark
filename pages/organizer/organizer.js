@@ -19,6 +19,7 @@
   };
 
   let tree = [];             // full bookmark tree (root children)
+  let folderCount = {};       // folderId -> number of direct children
   let currentFolderId = 'root________';
   let history = [];
   const collapse = new Set();
@@ -38,6 +39,30 @@
   async function loadTree() {
     const roots = await browser.bookmarks.getTree();
     tree = roots[0].children || [];
+    rebuildFolderCount();
+    renderFolderTree();
+    renderContent();
+  }
+
+  // Map folderId -> count of its direct children (bookmarks + subfolders).
+  function rebuildFolderCount() {
+    folderCount = {};
+    const walk = (nodes) => {
+      (nodes || []).forEach((n) => {
+        if (n.type === 'folder') {
+          folderCount[n.id] = (n.children || []).length;
+          walk(n.children);
+        }
+      });
+    };
+    walk(tree);
+  }
+
+  // Re-fetch the bookmark tree, refresh counts and re-render everything.
+  async function refresh() {
+    const roots = await browser.bookmarks.getTree();
+    tree = roots[0].children || [];
+    rebuildFolderCount();
     renderFolderTree();
     renderContent();
   }
@@ -161,7 +186,8 @@
       if (node.type === 'folder') {
         item.querySelector('.item-type').textContent = '文件夹';
         item.querySelector('.item-title').textContent = node.title || '（未命名）';
-        item.querySelector('.item-url').textContent = `${(node.children||[]).length} 项`;
+        const cnt = folderCount[node.id] !== undefined ? folderCount[node.id] : (node.children || []).length;
+        item.querySelector('.item-url').textContent = `${cnt} 项`;
         const icon = item.querySelector('.item-icon');
         icon.innerHTML = GG.icon('folder');
       } else {
@@ -343,8 +369,7 @@
     if (moved) {
       pushHistory({ type: 'move', prev, target: targetFolder, ids });
       GG.toast.show(`已移动 ${moved} 项`, 'success');
-      renderFolderTree();
-      renderContent();
+      refresh();
     }
   }
   function moveSelectedTo(folderId) {
@@ -370,8 +395,7 @@
       pushHistory({ type: 'delete', captured });
       GG.toast.show(`已删除 ${del} 项`, 'success');
       sel.items.clear();
-      renderFolderTree();
-      renderContent();
+      refresh();
     }
   }
 
@@ -418,8 +442,7 @@
     if (!name || !name.trim()) return;
     const node = await browser.bookmarks.create({ parentId, title: name.trim() });
     collapse.delete(node.id);
-    renderFolderTree();
-    renderContent();
+    refresh();
   }
 
   // ---------- Rename ----------
@@ -481,8 +504,7 @@
     await browser.bookmarks.removeTree(node.id).catch(() => {});
     pushHistory({ type: 'deleteFolder', id: node.id, title: node.title, parentId: node.parentId });
     GG.toast.show('已删除文件夹', 'success');
-    renderFolderTree();
-    renderContent();
+    refresh();
   }
 
   function closeMenuOnOutside(menu) {
@@ -506,15 +528,13 @@
         await restoreNode(entry.captured[id]);
       }
       GG.toast.show('已撤销删除', 'success');
-      renderFolderTree();
-      renderContent();
+      refresh();
     } else if (entry.type === 'move') {
       for (const id of entry.prev) {
         await browser.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {});
       }
       GG.toast.show('已撤销移动', 'success');
-      renderFolderTree();
-      renderContent();
+      refresh();
     } else if (entry.type === 'reorder') {
       await applyOrderSilent(entry.folderId, entry.prev);
       GG.toast.show('已撤销排序', 'success');
