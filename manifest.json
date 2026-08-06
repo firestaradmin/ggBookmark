@@ -27,7 +27,7 @@
     ]
   },
   "options_ui": {
-    "page": "pages/settings/settings.html",
+    "page": "pages/newtab/newtab.html",
     "open_in_tab": true
   },
   "web_accessible_resources": [
