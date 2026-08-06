@@ -83,21 +83,62 @@
       const b = document.createElement('button');
       b.className = 'cat' + (cat.id === state.activeCategory ? ' active' : '');
       b.dataset.id = cat.id;
-      b.innerHTML = `
-        <span class="cat-name"></span>
-        <span class="cat-add" title="新建分类">＋</span>
-        <span class="cat-del" title="删除分类">×</span>
-      `;
+      b.innerHTML = `<span class="cat-name"></span>`;
       b.querySelector('.cat-name').textContent = cat.name;
-      b.addEventListener('click', (e) => {
-        const add = e.target.closest('.cat-add');
-        const del = e.target.closest('.cat-del');
-        if (del) { e.stopPropagation(); removeCategory(cat.id); return; }
-        if (add) { e.stopPropagation(); addCategory(); return; }
-        setActiveCategory(cat.id);
+      b.addEventListener('click', () => setActiveCategory(cat.id));
+      b.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openCatMenu(e, cat);
       });
       catsBar.appendChild(b);
     });
+    // single "+" button at the far right of the category bar
+    const add = document.createElement('button');
+    add.className = 'cat cat-add';
+    add.title = '新建分类';
+    add.textContent = '＋';
+    add.addEventListener('click', (e) => { e.stopPropagation(); addCategory(); });
+    catsBar.appendChild(add);
+  }
+
+  // Right-click context menu for a category (rename / delete / add).
+  let catMenuEl = null;
+  function openCatMenu(e, cat) {
+    closeCatMenu();
+    const menu = document.createElement('div');
+    menu.className = 'menu glass cat-ctx';
+    const items = [
+      { label: '重命名', fn: () => renameCategory(cat.id) },
+      { label: '新建分类', fn: () => addCategory() },
+      { label: '删除分类', danger: true, fn: () => removeCategory(cat.id) },
+    ];
+    items.forEach((it) => {
+      const b = document.createElement('button');
+      b.className = 'menu-item' + (it.danger ? ' danger' : '');
+      b.textContent = it.label;
+      b.addEventListener('click', () => { closeCatMenu(); it.fn(); });
+      menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    catMenuEl = menu;
+    // position near the cursor, clamped to viewport
+    const x = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8);
+    const y = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  }
+  function closeCatMenu() {
+    if (catMenuEl) { catMenuEl.remove(); catMenuEl = null; }
+  }
+
+  function renameCategory(id) {
+    const cat = state.categories.find((c) => c.id === id);
+    if (!cat) return;
+    const name = prompt('重命名分类：', cat.name);
+    if (!name || !name.trim()) return;
+    cat.name = name.trim();
+    persist();
+    renderCats();
   }
 
   function setActiveCategory(id) {
@@ -881,11 +922,17 @@
     wireButtons();
     enableGridDrag();
     enableColumnDrop();
-    // close menu on outside click
+    // close menus on outside click / scroll / escape
     document.addEventListener('click', (e) => {
       const menu = $('#seMenu');
       if (!e.target.closest('#seIcon') && !e.target.closest('#seMenu')) menu.classList.remove('open');
+      if (!e.target.closest('.cat-ctx')) closeCatMenu();
     });
+    document.addEventListener('contextmenu', (e) => {
+      if (!e.target.closest('.cat')) closeCatMenu();
+    });
+    document.addEventListener('scroll', closeCatMenu, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCatMenu(); });
     renderAll();
 
     // listen for settings changes from settings page
