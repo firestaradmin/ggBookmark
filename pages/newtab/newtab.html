@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GG 起始页</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <link rel="stylesheet" href="newtab.css">
+</head>
+<body>
+  <div class="gg-bg" data-style="default"></div>
+
+  <!-- Header -->
+  <header class="topbar">
+    <div class="cats" id="catsBar" aria-label="分类"></div>
+
+    <div class="searchwrap glass">
+      <span class="se-icon" id="seIcon" title="切换搜索引擎"></span>
+      <input id="searchInput" type="text" placeholder="搜索..." autofocus autocomplete="off" spellcheck="false">
+      <button class="se-pick glass" id="sePick" title="选择搜索引擎"></button>
+      <button class="se-go btn primary" id="seGo" title="搜索">搜索</button>
+      <div class="menu glass" id="seMenu"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn icon-btn" id="btnUndo" title="撤回" disabled></button>
+      <button class="btn icon-btn" id="btnOrganize" title="整理书签"></button>
+      <button class="btn icon-btn" id="btnSettings" title="设置"></button>
+      <button class="btn icon-btn" id="btnAddCard" title="卡片添加：添加一个分类卡片"></button>
+    </div>
+  </header>
+
+  <!-- Grid -->
+  <main class="canvas">
+    <div class="grid" id="grid" data-empty="false">
+      <div class="grid-empty">
+        <div class="empty-icon"></div>
+        <p>还没有卡片</p>
+        <p class="sub">点击右上角“卡片添加”，选择一个书签文件夹来生成卡片。</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Template -->
+  <template id="bookmarkTileTpl">
+    <li class="tile" draggable="true">
+      <div class="tile-icon" data-action="open"></div>
+      <div class="tile-body" data-action="open">
+        <div class="tile-title"></div>
+        <div class="tile-desc"></div>
+      </div>
+      <div class="tile-more" tabindex="0" role="button" title="更多"></div>
+      <div class="tile-menu menu glass"></div>
+    </li>
+  </template>
+
+  <template id="cardTpl">
+    <section class="card" data-folder-id="">
+      <header class="card-head">
+        <span class="card-drag" draggable="true" title="拖动标题可调整分类顺序"></span>
+        <h2 class="card-title"></h2>
+        <button class="card-more btn icon-btn" title="卡片设置"></button>
+        <div class="card-menu menu glass"></div>
+      </header>
+      <ul class="card-body"></ul>
+    </section>
+  </template>
+
+  <div id="folderPickerWrap" class="overlay hidden">
+    <div class="picker glass">
+      <div class="picker-head">
+        <h3 id="pickerTitle">选择书签文件夹</h3>
+        <button class="btn icon-btn" id="pickerClose">✕</button>
+      </div>
+      <div class="picker-tree" id="pickerTree"></div>
+      <div class="picker-foot">
+        <label class="cb"><input type="checkbox" id="pickerRecursive"> 包含子文件夹</label>
+        <button class="btn primary" id="pickerConfirm">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../lib/store.js"></script>
+  <script src="../../js/shared.js"></script>
+  <script src="newtab.js"></script>
+</body>
+</html>

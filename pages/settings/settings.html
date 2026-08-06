@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GG 设置</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body contextmenu="return false">
+  <div class="gg-bg" data-style="default"></div>
+
+  <div class="shell glass">
+    <h1 class="title">GG 设置</h1>
+
+    <section class="group">
+      <h2>背景</h2>
+      <div class="field">
+        <label>背景风格</label>
+        <div class="seg">
+          <button data-bg="default" class="seg-btn">渐变</button>
+          <button data-bg="gradient" class="seg-btn">深色渐变</button>
+          <button data-bg="image" class="seg-btn">自定义图片</button>
+        </div>
+      </div>
+      <div class="field" id="bgUrlWrap">
+        <label>图片地址</label>
+        <input id="bgUrl" type="text" placeholder="https://... 背景图 URL">
+        <button class="btn primary" id="bgApply">应用</button>
+      </div>
+      <div class="hint">也可以粘贴本地图片 URL。自定义图片风格需选“自定义图片”。</div>
+    </section>
+
+    <section class="group">
+      <h2>搜索</h2>
+      <div class="field">
+        <label>默认搜索引擎</label>
+        <select id="seSelect"></select>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>外观</h2>
+      <div class="field">
+        <label>主题色</label>
+        <div class="colors" id="colors"></div>
+      </div>
+      <div class="field">
+        <label>卡片描述</label>
+        <label class="cb"><input type="checkbox" id="showDesc" checked> 显示网站描述（域名）</label>
+      </div>
+      <div class="field">
+        <label>字体大小</label>
+        <select id="fontSize">
+          <option value="small">小</option>
+          <option value="medium">中</option>
+          <option value="large">大</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="group">
+      <h2>数据</h2>
+      <div class="field actions">
+        <button class="btn" id="btnResetBg">重置背景</button>
+      </div>
+      <div class="hint">分类与卡片配置均保存在本地，可一直调整。<br>书签本身保存在 Firefox 的“整理书签”页面中管理。</div>
+    </section>
+
+    <div class="footer">
+      <button class="btn primary" id="btnSave">保存设置</button>
+    </div>
+  </div>
+
+  <script src="../../lib/store.js"></script>
+  <script src="../../js/shared.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

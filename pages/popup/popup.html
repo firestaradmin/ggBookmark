@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GG Bookmark</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <style>
+    body { width: 280px; padding: 14px; margin: 0; }
+    .pp-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .pp-title svg { width: 18px; height: 18px; color: var(--accent); }
+    .pp-list { display: flex; flex-direction: column; gap: 4px; }
+    .pp-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border: 1px solid transparent;
+      background: var(--glass);
+      color: var(--text);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      text-align: left;
+      transition: all .15s ease;
+    }
+    .pp-item:hover { background: var(--glass-strong); border-color: var(--glass-border); }
+    .pp-item svg { width: 16px; height: 16px; color: var(--text-dim); }
+    .pp-item .desc { color: var(--text-faint); font-size: 11px; margin-top: 2px; }
+    .pp-item > div { display: flex; flex-direction: column; }
+    .pp-foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.06); font-size: 11px; color: var(--text-faint); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="gg-bg" data-style="default" style="opacity:.5"></div>
+  <h1 class="pp-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    GG Bookmark
+  </h1>
+  <div class="pp-list">
+    <button class="pp-item" id="openNewtab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-3v-7H8v7H5a2 2 0 0 1-2-2z"/></svg>
+      <div><span>打开起始页</span><span class="desc">在新标签打开</span></div>
+    </button>
+    <button class="pp-item" id="openOrganize">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      <div><span>整理书签</span><span class="desc">多选 · 移动 · 删除</span></div>
+    </button>
+    <button class="pp-item" id="openSettings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <div><span>设置</span><span class="desc">背景 · 搜索引擎 · 主题色</span></div>
+    </button>
+  </div>
+  <div class="pp-foot">GG Bookmark v1.0</div>
+
+  <script src="../../lib/store.js"></script>
+  <script src="../../js/shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

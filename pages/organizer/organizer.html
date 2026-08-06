@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>整理书签</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <link rel="stylesheet" href="organizer.css">
+</head>
+<body>
+  <div class="gg-bg" data-style="default"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>整理书签</h1>
+      <button class="btn icon-btn" id="btnHome" title="返回起始页"></button>
+    </div>
+    <div class="toolbar">
+      <button class="btn icon-btn" id="btnUndo" title="撤回" disabled></button>
+      <button class="btn icon-btn" id="btnDelete" title="删除选中" disabled></button>
+      <div class="selected-info-pill" id="selectedInfo">未选中</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Folder tree (left) -->
+    <aside class="pane folders glass">
+      <div class="pane-title">
+        <span>文件夹</span>
+        <button class="btn icon-btn" id="btnNewFolder" title="新建文件夹"></button>
+      </div>
+      <div id="folderTree" class="folder-tree"></div>
+    </aside>
+
+    <!-- Content (right) -->
+    <section class="pane content glass">
+      <div class="pane-title" id="currentFolderTitle">
+        <span>书签</span>
+      </div>
+      <div id="bookmarkGrid" class="bookmark-grid"></div>
+      <div class="drop-hint hidden" id="dropHint">松开以移动到当前文件夹</div>
+    </section>
+  </main>
+
+  <template id="bookmarkItemTpl">
+    <div class="item" draggable="true">
+      <div class="item-check"></div>
+      <div class="item-icon"></div>
+      <div class="item-info">
+        <div class="item-title"></div>
+        <div class="item-url"></div>
+      </div>
+      <div class="item-type"></div>
+    </div>
+  </template>
+
+  <!-- Move-to menu -->
+  <div class="menu glass" id="moveMenu"></div>
+
+  <script src="../../lib/store.js"></script>
+  <script src="../../js/shared.js"></script>
+  <script src="organizer.js"></script>
+</body>
+</html>

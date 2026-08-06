@@ -1,0 +1,121 @@
+/* GG Bookmark - settings page */
+
+.shell {
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 28px 32px 20px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  backdrop-filter: blur(20px);
+}
+.title {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 24px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.group {
+  padding: 18px 0;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.group h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.group h2::before {
+  content: "";
+  width: 4px; height: 14px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  border-radius: 2px;
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.field label:first-child {
+  width: 110px;
+  color: var(--text-dim);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.field input[type="text"], .field select {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  outline: none;
+  flex: 1;
+  min-width: 200px;
+}
+.field input:focus, .field select:focus { border-color: var(--accent); }
+.field.actions { gap: 10px; }
+.hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 6px;
+  line-height: 1.6;
+  padding-left: 122px;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--glass);
+}
+.seg-btn {
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all .15s ease;
+}
+.seg-btn:hover { color: var(--text); }
+.seg-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+}
+.colors {
+  display: flex;
+  gap: 8px;
+}
+.color-dot {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform .15s ease, border-color .15s ease;
+}
+.color-dot:hover { transform: scale(1.1); }
+.color-dot.active { border-color: #fff; transform: scale(1.1); }
+.cb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.cb input { accent-color: var(--accent); width: 16px; height: 16px; }
+.footer {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  text-align: right;
+}
