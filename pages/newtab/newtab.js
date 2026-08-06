@@ -79,7 +79,8 @@
   function maybeSync(mode) {
     if (!GG.Sync) return;
     const sync = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
-    if (!sync.enabled || sync.mode !== mode) return;
+    const triggers = Array.isArray(sync.triggers) ? sync.triggers : [];
+    if (!sync.enabled || !triggers.includes(mode)) return;
     // 防抖：短时间内多次变更只同步一次
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {

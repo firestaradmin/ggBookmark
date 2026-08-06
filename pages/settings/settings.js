@@ -363,19 +363,26 @@
     if ($('#syncUser')) $('#syncUser').value = sync.username || '';
     if ($('#syncPass')) $('#syncPass').value = sync.password || '';
     if ($('#syncFile')) $('#syncFile').value = sync.filename || 'ggbookmark-config.json';
-    if ($('#syncMode')) $('#syncMode').value = sync.mode || 'manual';
+    const triggers = Array.isArray(sync.triggers) ? sync.triggers : [];
+    if ($('#syncTrigInterval')) $('#syncTrigInterval').checked = triggers.includes('interval');
+    if ($('#syncTrigSettings')) $('#syncTrigSettings').checked = triggers.includes('settingsChange');
+    if ($('#syncTrigBookmark')) $('#syncTrigBookmark').checked = triggers.includes('bookmarkChange');
     if ($('#syncInterval')) $('#syncInterval').value = sync.intervalMinutes || 30;
     const iv = document.getElementById('syncIntervalField');
-    if (iv) iv.style.display = (sync.mode === 'interval') ? '' : 'none';
+    if (iv) iv.style.display = triggers.includes('interval') ? '' : 'none';
   }
   function readSync() {
+    const triggers = [];
+    if ($('#syncTrigInterval') && $('#syncTrigInterval').checked) triggers.push('interval');
+    if ($('#syncTrigSettings') && $('#syncTrigSettings').checked) triggers.push('settingsChange');
+    if ($('#syncTrigBookmark') && $('#syncTrigBookmark').checked) triggers.push('bookmarkChange');
     return {
       enabled: $('#syncEnabled') ? $('#syncEnabled').checked : false,
       server: $('#syncServer') ? $('#syncServer').value.trim() : '',
       username: $('#syncUser') ? $('#syncUser').value.trim() : '',
       password: $('#syncPass') ? $('#syncPass').value : '',
       filename: ($('#syncFile') ? $('#syncFile').value.trim() : '') || 'ggbookmark-config.json',
-      mode: $('#syncMode') ? $('#syncMode').value : 'manual',
+      triggers: triggers,
       intervalMinutes: $('#syncInterval') ? (Number($('#syncInterval').value) || 30) : 30
     };
   }
@@ -625,12 +632,12 @@
       }
     });
 
-    // 同步：手动上传 / 下载 + 方式切换显示间隔
-    const syncMode = $('#syncMode');
-    if (syncMode) {
-      syncMode.addEventListener('change', () => {
+    // 同步：手动上传 / 下载 + 勾选定时后显示间隔
+    const syncTrigInterval = $('#syncTrigInterval');
+    if (syncTrigInterval) {
+      syncTrigInterval.addEventListener('change', () => {
         const iv = document.getElementById('syncIntervalField');
-        if (iv) iv.style.display = syncMode.value === 'interval' ? '' : 'none';
+        if (iv) iv.style.display = syncTrigInterval.checked ? '' : 'none';
       });
     }
     if ($('#btnSyncUpload')) {

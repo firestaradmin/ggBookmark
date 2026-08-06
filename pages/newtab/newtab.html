@@ -231,14 +231,12 @@
               <label>文件名</label>
               <input id="syncFile" type="text" placeholder="ggbookmark-config.json">
             </div>
-            <div class="field">
-              <label>同步方式</label>
-              <select id="syncMode">
-                <option value="manual">手动（仅按钮）</option>
-                <option value="interval">定时备份</option>
-                <option value="settingsChange">设置更改时</option>
-                <option value="bookmarkChange">书签被修改时</option>
-              </select>
+            <div class="field col">
+              <label>自动同步触发方式</label>
+              <label class="cb"><input type="checkbox" id="syncTrigInterval" value="interval"> 定时备份（按下方间隔）</label>
+              <label class="cb"><input type="checkbox" id="syncTrigSettings" value="settingsChange"> 设置更改时</label>
+              <label class="cb"><input type="checkbox" id="syncTrigBookmark" value="bookmarkChange"> 书签被修改时</label>
+              <div class="hint">可同时勾选多种触发方式，手动上传/下载按钮始终可用。</div>
             </div>
             <div class="field" id="syncIntervalField">
               <label>间隔(分钟)</label>
