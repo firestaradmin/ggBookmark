@@ -21,8 +21,16 @@
     'wallhaven-rrd6gj.webp',
     'wallhaven-z8zd2j.webp'
   ];
+  const PRESET_PREFIX = 'preset:';
+  function presetNameFromValue(value) {
+    return value && value.startsWith(PRESET_PREFIX) ? value.slice(PRESET_PREFIX.length) : null;
+  }
   function presetURL(name) {
     return browser.runtime.getURL('pics/wallpapers/' + name);
+  }
+  // 存储/导出时使用预设文件名标识，而非完整 URL
+  function presetRef(name) {
+    return PRESET_PREFIX + name;
   }
 
   function applyBgPreview() {
@@ -35,8 +43,11 @@
     bg.style.setProperty('--bg-blur', blur + 'px');
     bg.style.setProperty('--bg-dim', String(dim));
     if (currentStyle === 'image' && $('#bgUrl').value.trim()) {
+      const raw = $('#bgUrl').value.trim();
+      const preset = presetNameFromValue(raw);
+      const imgUrl = preset ? presetURL(preset) : raw;
       bg.dataset.style = 'image';
-      bg.style.setProperty('--bg-image', `url("${$('#bgUrl').value.trim()}")`);
+      bg.style.setProperty('--bg-image', `url("${imgUrl}")`);
     } else if (currentStyle === 'gradient') {
       bg.dataset.style = 'gradient';
     } else {
@@ -85,6 +96,7 @@
       const d = document.createElement('div');
       d.className = 'preset';
       d.dataset.url = url;
+      d.dataset.name = name;
       d.title = name;
       const img = document.createElement('img');
       img.src = url;
@@ -92,7 +104,7 @@
       img.loading = 'lazy';
       d.appendChild(img);
       d.addEventListener('click', () => {
-        $('#bgUrl').value = url;
+        $('#bgUrl').value = presetRef(name);
         document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'image'));
         applyBgPreview();
         updatePreview();
@@ -103,8 +115,82 @@
   }
   function markActivePreset() {
     const current = $('#bgUrl').value.trim();
+    const sel = presetNameFromValue(current);
     document.querySelectorAll('#presetGrid .preset').forEach((p) => {
-      p.classList.toggle('active', p.dataset.url === current);
+      p.classList.toggle('active', sel ? p.dataset.name === sel : p.dataset.url === current);
+    });
+  }
+
+  // ---------- 书签快照 / 还原 ----------
+  // 导出时把整个书签树序列化进配置；导入时按路径重建并把卡片的 folderId 重新映射。
+  const PATH_SEP = '|||';
+  function indexBookmarkPaths(node, parentPath, pathToId, idToPath) {
+    (node.children || []).forEach((child) => {
+      if (child.type === 'folder') {
+        const p = parentPath.concat(child.title);
+        pathToId.set(p.join(PATH_SEP), child.id);
+        idToPath.set(child.id, p);
+        indexBookmarkPaths(child, p, pathToId, idToPath);
+      }
+    });
+  }
+  // 仅快照被卡片引用的书签文件夹子树（而非整个 Firefox 书签树），减小体积
+  async function snapshotBookmarks(apps) {
+    const ids = Array.from(new Set((apps || []).map((a) => a.folderId).filter(Boolean)));
+    const subs = [];
+    for (const id of ids) {
+      try {
+        const sub = await browser.bookmarks.getSubTree(id);
+        if (sub && sub[0]) subs.push(sub[0]);
+      } catch (e) { /* 文件夹可能已不存在 */ }
+    }
+    return subs;
+  }
+  async function hasExistingBookmarks() {
+    for (const r of ['menu________', 'toolbar_____', 'unfiled_____']) {
+      try {
+        const kids = await browser.bookmarks.getChildren(r);
+        if (kids && kids.length) return true;
+      } catch (e) { /* ignore */ }
+    }
+    return false;
+  }
+  // 在“其他书签”下创建“GG Bookmark 导入”根，重建导出的书签子树，返回 { newPathToId, idToPath }
+  async function recreateBookmarks(trees) {
+    const idToPath = new Map();
+    const oldPathToId = new Map();
+    (trees || []).forEach((sub) => indexBookmarkPaths(sub, [], oldPathToId, idToPath));
+
+    const top = await browser.bookmarks.create({ title: 'GG Bookmark 导入', parentId: 'unfiled_____' });
+    const newPathToId = new Map();
+
+    async function recreate(nodes, parentId, parentPath) {
+      for (const n of nodes) {
+        if (n.type === 'folder') {
+          const f = await browser.bookmarks.create({ title: n.title, parentId, type: 'folder' });
+          const p = parentPath.concat(n.title);
+          newPathToId.set(p.join(PATH_SEP), f.id);
+          if (n.children) await recreate(n.children, f.id, p);
+        } else if (n.type === 'bookmark' && n.url) {
+          await browser.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
+        }
+      }
+    }
+    for (const sub of (trees || [])) {
+      await recreate(sub.children || [], top.id, []);
+    }
+    return { newPathToId, idToPath };
+  }
+  // 根据旧 id 映射到新创建的文件夹 id（按路径匹配）
+  function remapFolderIds(apps, idToPath, newPathToId) {
+    const remap = {};
+    idToPath.forEach((path, oldId) => {
+      const newId = newPathToId.get(path.join(PATH_SEP));
+      if (newId) remap[oldId] = newId;
+    });
+    return (apps || []).map((a) => {
+      const nf = a.folderId && remap[a.folderId] ? remap[a.folderId] : a.folderId;
+      return Object.assign({}, a, { folderId: nf });
     });
   }
 
@@ -132,13 +218,14 @@
   function updatePreview() {
     const preview = $('#bgPreview');
     const img = $('#previewImg');
-    const url = $('#bgUrl').value.trim();
-    if (url) {
-      img.src = url;
-      preview.classList.remove('hidden');
-    } else {
+    const raw = $('#bgUrl').value.trim();
+    if (!raw) {
       preview.classList.add('hidden');
+      return;
     }
+    const preset = presetNameFromValue(raw);
+    img.src = preset ? presetURL(preset) : raw;
+    preview.classList.remove('hidden');
   }
   function fileToDataURL(file) {
     return new Promise((resolve) => {
@@ -221,19 +308,27 @@
       GG.toast.show('已重置背景', 'success');
     });
 
-    // 导出配置为 JSON 文件（不含壁纸图片数据，但包含主页面卡片配置）
+    // 导出配置为 JSON 文件（不含壁纸图片数据，但包含主页面卡片配置与全部书签）
     $('#btnExport').addEventListener('click', async () => {
       const stored = await browser.storage.local.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
       const cfg = {
         version: GG.VERSION,
         settings: Object.assign({}, stored.settings || {})
       };
-      // 不导出壁纸数据（通常是体积很大的 data URL）
-      delete cfg.settings.backgroundImage;
+      // 仅排除体积很大的本地上传（data URL）壁纸；内置预设壁纸的 runtime URL 予以保留
+      if (cfg.settings.backgroundImage && cfg.settings.backgroundImage.startsWith('data:')) {
+        delete cfg.settings.backgroundImage;
+      }
       cfg.apps = stored.apps || [];
       cfg.categories = stored.categories || [];
       cfg.orderByCat = stored.orderByCat || {};
       cfg.activeCat = stored.activeCat || null;
+      // 导出被卡片引用的书签子树（不含整个 Firefox 书签树）
+      try {
+        cfg.bookmarks = await snapshotBookmarks(stored.apps || []);
+      } catch (e) {
+        cfg.bookmarks = null;
+      }
       const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -263,9 +358,30 @@
         const importedSettings = Object.assign({}, GG.DEFAULTS, imported.settings || {});
         if (!importedSettings.backgroundImage) importedSettings.backgroundImage = currentBg;
 
+        let apps = imported.apps || [];
+        let skipBookmarks = false;
+
+        // 导入书签：若会覆盖/新增已有书签，先提示用户备份
+        if (imported.bookmarks) {
+          const existing = await hasExistingBookmarks();
+          if (existing && !window.confirm('导入的配置包含书签，将重新创建书签（可能与现有书签重复）。\n建议先到 Firefox 书签库备份现有书签，再继续导入。\n仍要继续？')) {
+            // 仅跳过书签重建，仍导入设置与卡片配置
+            skipBookmarks = true;
+            GG.toast.show('已跳过书签导入，仅导入设置与卡片', 'info');
+          }
+          if (!skipBookmarks) {
+            try {
+              const { newPathToId, idToPath } = await recreateBookmarks(imported.bookmarks);
+              apps = remapFolderIds(apps, idToPath, newPathToId);
+            } catch (e) {
+              GG.toast.show('书签导入失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+            }
+          }
+        }
+
         const toSave = {
           settings: importedSettings,
-          apps: imported.apps || [],
+          apps: apps,
           categories: imported.categories || [],
           orderByCat: imported.orderByCat || {},
           activeCat: imported.activeCat || null
@@ -282,9 +398,9 @@
       }
     });
 
-    // 清除配置：恢复默认并删除本地存储
+    // 清除配置：恢复默认并删除本地存储（仅本扩展配置，不删除 Firefox 书签）
     $('#btnClear').addEventListener('click', async () => {
-      if (!window.confirm('确定清除所有配置？将恢复默认设置且无法撤销（含卡片与壁纸）。')) return;
+      if (!window.confirm('确定清除所有配置？将恢复默认设置且无法撤销（含卡片与壁纸）。\n注意：此操作仅清除本扩展配置，不会删除 Firefox 中的书签。')) return;
       await browser.storage.local.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat']);
       settings = Object.assign({}, GG.DEFAULTS);
       load();
