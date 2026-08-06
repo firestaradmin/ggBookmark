@@ -150,6 +150,32 @@
 .icon-btn:disabled { opacity: .35; cursor: not-allowed; }
 .icon-btn.active { color: #fff; background: rgba(79, 124, 255, 0.22); box-shadow: inset 0 0 0 1px rgba(79,124,255,.5); }
 
+/* View settings dropdown (compact mode + card height) */
+.view-menu-wrap { position: relative; }
+.view-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  display: none;
+  min-width: 200px;
+  padding: 8px;
+}
+.view-menu.open { display: block; }
+.view-group + .view-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.07); }
+.view-group-title {
+  font-size: 11px; color: var(--text-faint);
+  padding: 4px 12px 6px; text-transform: none; letter-spacing: .02em;
+}
+.view-menu .menu-item .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: transparent; flex-shrink: 0; margin-right: 2px;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.35);
+}
+.view-menu .menu-item.selected .dot {
+  background: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.view-menu .menu-item.selected { background: rgba(79,124,255,.16); color: #fff; }
+
 /* Canvas & grid */
 .canvas {
   padding: 24px 22px 80px;

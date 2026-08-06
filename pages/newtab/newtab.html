@@ -23,8 +23,22 @@
 
     <div class="actions">
       <button class="btn icon-btn" id="btnUndo" title="撤回" disabled></button>
-      <button class="btn icon-btn" id="btnCompact" title="紧凑模式：全部卡片"></button>
-      <button class="btn icon-btn" id="btnFitAll" title="自动适应：所有卡片根据子项数量调整高度"></button>
+      <div class="view-menu-wrap">
+        <button class="btn icon-btn" id="btnView" title="显示设置：紧凑模式与卡片高度"></button>
+        <div class="menu glass view-menu" id="viewMenu">
+          <div class="view-group">
+            <div class="view-group-title">紧凑模式（所有卡片）</div>
+            <button class="menu-item" data-view="compact" data-val="auto"><span class="dot"></span><span>自动</span></button>
+            <button class="menu-item" data-view="compact" data-val="on"><span class="dot"></span><span>固定开启</span></button>
+            <button class="menu-item" data-view="compact" data-val="off"><span class="dot"></span><span>固定关闭</span></button>
+          </div>
+          <div class="view-group">
+            <div class="view-group-title">卡片高度（所有卡片）</div>
+            <button class="menu-item" data-view="fit" data-val="auto"><span class="dot"></span><span>自适应高度</span></button>
+            <button class="menu-item" data-view="fit" data-val="fixed"><span class="dot"></span><span>固定高度</span></button>
+          </div>
+        </div>
+      </div>
       <button class="btn icon-btn" id="btnOrganize" title="整理书签"></button>
       <button class="btn icon-btn" id="btnSettings" title="设置"></button>
       <button class="btn icon-btn" id="btnAddCard" title="卡片添加：添加一个分类卡片"></button>
