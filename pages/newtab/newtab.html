@@ -45,16 +45,20 @@
     </div>
   </header>
 
-  <!-- Grid -->
-  <main class="canvas">
-    <div class="grid" id="grid" data-empty="false">
-      <div class="grid-empty">
-        <div class="empty-icon"></div>
-        <p>还没有卡片</p>
-        <p class="sub">点击右上角“卡片添加”，选择一个书签文件夹来生成卡片。</p>
+  <!-- Scroll wrapper: real scroll container so custom scrollbars apply on
+       both Firefox and Chrome/Windows (root scroller ignores them). -->
+  <div class="scroll" id="scroll">
+    <!-- Grid -->
+    <main class="canvas">
+      <div class="grid" id="grid" data-empty="false">
+        <div class="grid-empty">
+          <div class="empty-icon"></div>
+          <p>还没有卡片</p>
+          <p class="sub">点击右上角“卡片添加”，选择一个书签文件夹来生成卡片。</p>
+        </div>
       </div>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <!-- Template -->
   <template id="bookmarkTileTpl">
