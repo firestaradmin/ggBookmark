@@ -25,6 +25,7 @@
   async function loadPersistent() {
     const data = await browser.storage.local.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
     state.settings = Object.assign({}, GG.DEFAULTS, data.settings || {});
+    window.__ggSettings = state.settings;
     state.apps = data.apps || [];
     state.categories = data.categories || [];
     if (!state.categories.length) {
@@ -270,11 +271,16 @@
       const tile = tpl.content.cloneNode(true).querySelector('.tile');
       const icon = tile.querySelector('.tile-icon');
       icon.dataset.title = bm.title || bm.url;
-      // icon: use favicon
-      const img = document.createElement('img');
-      img.onerror = function () { img.remove(); const s = document.createElement('span'); s.className = 'letter'; s.textContent = (bm.title || '?').charAt(0); icon.appendChild(s); };
-      img.src = GG.iconFor(bm.url).src;
-      icon.appendChild(img);
+      // icon: use favicon (按设置来源；local 直接显示首字母)
+      const src = GG.iconFor(bm.url, (state.settings && state.settings.faviconSource) || GG.DEFAULTS.faviconSource).src;
+      if (src) {
+        const img = document.createElement('img');
+        img.onerror = function () { img.remove(); const s = document.createElement('span'); s.className = 'letter'; s.textContent = (bm.title || '?').charAt(0); icon.appendChild(s); };
+        img.src = src;
+        icon.appendChild(img);
+      } else {
+        const s = document.createElement('span'); s.className = 'letter'; s.textContent = (bm.title || '?').charAt(0); icon.appendChild(s);
+      }
       tile.querySelector('.tile-title').textContent = bm.title || (function () { try { return new URL(bm.url).host; } catch (e) { return bm.url; } })();
       tile.querySelector('.tile-desc').textContent = hostOf(bm.url);
       tile.dataset.url = bm.url;
@@ -1363,13 +1369,16 @@
       const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat'].some((k) => k in changes);
       if (changes.settings) {
         const prevWidth = colWidth;
+        const prevFavicon = state.settings && state.settings.faviconSource;
         state.settings = Object.assign({}, GG.DEFAULTS, changes.settings.newValue || {});
+        window.__ggSettings = state.settings;
         colWidth = state.settings.cardWidth || 320;
         applyBg();
         renderSearchEngine();
         syncViewBtn();
         syncViewMenu();
         if (prevWidth !== colWidth) renderCards();  // rebalance columns
+        else if (prevFavicon !== state.settings.faviconSource) renderCards(); // 图标来源变化需重绘
         else renderCards(); // refresh compact state from global setting
         maybeSync('settingsChange');
         startIntervalSync();

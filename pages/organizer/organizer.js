@@ -10,6 +10,7 @@
   const $ = (s) => document.querySelector(s);
 
   const DEFAULT_ROOT = 'root________';
+  let orgSettings = {};
 
   let tree = [];
   let folderCount = {};
@@ -311,10 +312,15 @@
       item.querySelector('.item-title').textContent = node.title || hostOf(node.url);
       item.querySelector('.item-url').textContent = hostOf(node.url);
       const icon = item.querySelector('.item-icon');
-      const img = document.createElement('img');
-      img.onerror = function () { const s = document.createElement('span'); s.className = 'letter'; s.textContent = (node.title || '?').charAt(0); icon.innerHTML = ''; icon.appendChild(s); };
-      img.src = GG.iconFor(node.url).src;
-      icon.appendChild(img);
+      const fsrc = GG.iconFor(node.url, (orgSettings && orgSettings.faviconSource) || GG.DEFAULTS.faviconSource).src;
+      if (fsrc) {
+        const img = document.createElement('img');
+        img.onerror = function () { const s = document.createElement('span'); s.className = 'letter'; s.textContent = (node.title || '?').charAt(0); icon.innerHTML = ''; icon.appendChild(s); };
+        img.src = fsrc;
+        icon.appendChild(img);
+      } else {
+        const s = document.createElement('span'); s.className = 'letter'; s.textContent = (node.title || '?').charAt(0); icon.appendChild(s);
+      }
     }
     if (p.selection.has(node.id)) item.classList.add('selected');
 
@@ -706,6 +712,7 @@
 
   async function init() {
     wireButtons();
+    orgSettings = await GG.loadSettings();
     await loadTree();
     let first = null, second = null;
     walkFolders(tree, (fnode) => { if (!first) first = fnode.id; else if (!second) second = fnode.id; });

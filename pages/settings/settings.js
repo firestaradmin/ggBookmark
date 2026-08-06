@@ -339,6 +339,7 @@
     $('#seSelect').value = settings.searchEngine || 'bing';
     $('#showDesc').checked = settings.showDescriptions !== false;
     $('#fontSize').value = settings.fontSize || 'medium';
+    if ($('#faviconSource')) $('#faviconSource').value = settings.faviconSource || GG.DEFAULTS.faviconSource;
     buildColors();
     buildPresets();
     buildImportFolderSelect();
@@ -493,6 +494,7 @@
       settings.searchEngine = $('#seSelect').value;
       settings.showDescriptions = $('#showDesc').checked;
       settings.fontSize = $('#fontSize').value;
+      settings.faviconSource = $('#faviconSource') ? $('#faviconSource').value : GG.DEFAULTS.faviconSource;
       settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
       const activeTheme = document.querySelector('.theme-btn.active');
       if (activeTheme) settings.theme = activeTheme.dataset.theme;
