@@ -84,6 +84,7 @@
   transition: transform .15s ease;
 }
 .tree-row .tw-toggle.collapsed { transform: rotate(-90deg); }
+.tree-row .tw-toggle-empty { width: 16px; height: 16px; flex-shrink: 0; }
 .tree-leaf { margin-left: 7px; }
 
 /* Bookmark grid */

@@ -823,8 +823,8 @@
   }
 
   // ---------- Folder picker ----------
-  function openPicker(card, app) {
-    currentPick = { card, app, mode: 'card' };
+  function openPicker(card, app, col) {
+    currentPick = { card, app, mode: 'card', col: (typeof col === 'number' ? col : null) };
     buildTree();
     $('#pickerTitle').textContent = app ? '重新选择文件夹' : '选择一个书签文件夹';
     $('#folderPickerWrap').classList.remove('hidden');
@@ -852,10 +852,18 @@
     row.dataset.id = node.id;
     row.style.paddingLeft = (10 + depth * 4) + 'px';
 
-    const toggle = document.createElement('span');
-    toggle.className = 'tw-toggle';
-    toggle.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>`;
-    toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleOpen(wrap, toggle); });
+    // only show a toggle arrow when the folder actually contains subfolders
+    if (children.length) {
+      const toggle = document.createElement('span');
+      toggle.className = 'tw-toggle collapsed';
+      toggle.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>`;
+      toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleOpen(wrap, toggle); });
+      row.appendChild(toggle);
+    } else {
+      const spacer = document.createElement('span');
+      spacer.className = 'tw-toggle tw-toggle-empty';
+      row.appendChild(spacer);
+    }
 
     const icon = document.createElement('span');
     icon.classList.add('tw-icon');
@@ -872,7 +880,7 @@
     cnt.className = 'tw-count';
     cnt.textContent = count;
 
-    row.append(toggle, radio, icon, title, cnt);
+    row.append(radio, icon, title, cnt);
     row.addEventListener('click', () => {
       selectedFolderId = node.id;
       pickerTreeEl.querySelectorAll('.tree-row').forEach((r) => r.classList.remove('selected'));
@@ -882,7 +890,7 @@
     wrap.appendChild(row);
     if (children.length) {
       const sub = document.createElement('div');
-      sub.className = 'tree-children';
+      sub.className = 'tree-children collapsed';
       children.forEach((c) => sub.appendChild(buildNode(c, depth + 1)));
       wrap.appendChild(sub);
     }
@@ -897,6 +905,31 @@
   function closePicker() {
     pickerWrap().classList.add('hidden');
     currentPick = null;
+  }
+
+  // Right-click on empty grid space -> "new card" menu placed in that column.
+  let gridCtxEl = null;
+  function openGridMenu(e) {
+    closeGridMenu();
+    const col = e.target.closest('.grid-col');
+    if (!col) return;
+    if (e.target.closest('.card')) return; // don't trigger over a card
+    const menu = document.createElement('div');
+    menu.className = 'menu glass grid-ctx';
+    const b = document.createElement('button');
+    b.className = 'menu-item';
+    b.innerHTML = GG.icon('plus') + '<span>新建卡片</span>';
+    b.addEventListener('click', () => { closeGridMenu(); openPicker(null, null, Number(col.dataset.col)); });
+    menu.appendChild(b);
+    document.body.appendChild(menu);
+    gridCtxEl = menu;
+    const x = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8);
+    const y = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  }
+  function closeGridMenu() {
+    if (gridCtxEl) { gridCtxEl.remove(); gridCtxEl = null; }
   }
 
   function confirmPick() {
@@ -921,6 +954,8 @@
           folderId: selectedFolderId,
           recursive: $('#pickerRecursive').checked
         };
+        // place the new card in the column that was right-clicked (if any)
+        if (currentPick && typeof currentPick.col === 'number') newApp.col = currentPick.col;
         pushUndo({ type: 'removeCard', app: newApp, existed: false });
         state.apps.push(newApp);
         appendOrder(newApp.id);
@@ -1031,8 +1066,14 @@
     document.addEventListener('contextmenu', (e) => {
       if (!e.target.closest('.cat')) closeCatMenu();
     });
+    grid.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.card')) return; // let card handle its own (none) / default
+      e.preventDefault();
+      openGridMenu(e);
+    });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.grid-ctx')) closeGridMenu(); });
     document.addEventListener('scroll', closeCatMenu, true);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCatMenu(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatMenu(); closeGridMenu(); } });
     renderAll();
 
     // listen for settings changes from settings page
