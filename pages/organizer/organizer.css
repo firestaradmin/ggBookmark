@@ -36,6 +36,97 @@
   flex-direction: column;
   overflow: hidden;
 }
+
+/* Panel tabs (top of the content area) */
+.panel-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.panel-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-bottom: none;
+  max-width: 220px;
+}
+.panel-tab:hover { background: var(--glass); }
+.panel-tab.active {
+  background: var(--glass-strong);
+  color: var(--text);
+  border-color: rgba(255,255,255,.1);
+}
+.panel-tab .tab-icon { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; display: inline-flex; }
+.panel-tab .tab-icon svg { width: 100%; height: 100%; }
+.panel-tab .tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-tab .tab-close {
+  width: 18px; height: 18px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 5px; color: var(--text-faint); font-size: 14px; line-height: 1;
+}
+.panel-tab .tab-close:hover { background: rgba(255,255,255,.14); color: #fff; }
+.panel-tab-add {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; padding: 0;
+  background: transparent; color: var(--text-dim); cursor: pointer;
+  border-radius: 10px 10px 0 0; font-size: 18px;
+}
+.panel-tab-add:hover { background: var(--glass); color: #fff; }
+
+/* Panels: each holds a single folder view; multiple shown side by side */
+.panels {
+  flex: 1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  gap: 14px;
+  padding: 14px 12px;
+  overflow: auto;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,.02);
+  min-width: 0;
+}
+.panel.drag-target {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 14px rgba(79,124,255,.35);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  background: var(--glass);
+}
+.panel-head .ph-icon { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; display: inline-flex; }
+.panel-head .ph-icon svg { width: 100%; height: 100%; }
+.panel-head .ph-title { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-head .ph-actions { display: flex; gap: 4px; }
+.panel-head .ph-btn {
+  width: 26px; height: 26px; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-dim); cursor: pointer; border: none; background: transparent;
+}
+.panel-head .ph-btn:hover { background: var(--glass-strong); color: #fff; }
+.panel-head .ph-btn svg { width: 15px; height: 15px; }
 .pane-title {
   display: flex;
   align-items: center;
@@ -87,7 +178,7 @@
 .tree-row .tw-toggle-empty { width: 16px; height: 16px; flex-shrink: 0; }
 .tree-leaf { margin-left: 7px; }
 
-/* Bookmark grid */
+/* Bookmark grid (inside a panel) */
 .bookmark-grid {
   flex: 1;
   overflow-y: auto;
@@ -158,18 +249,8 @@
 .item-url { font-size: 11.5px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-type { font-size: 10px; color: var(--text-faint); border: 1px solid var(--glass-border); padding: 2px 8px; border-radius: 8px; flex-shrink: 0; }
 
-.drop-hint {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--accent);
-  color: #fff;
-  padding: 10px 22px;
-  border-radius: 999px;
-  font-size: 13px;
-  box-shadow: var(--shadow);
-  z-index: 60;
+.panel-empty-hint {
+  text-align: center; color: var(--text-faint); padding: 30px 12px; font-size: 12px;
 }
 
   #moveMenu { position: fixed; z-index: 80; display: none; }

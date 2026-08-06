@@ -1,80 +1,75 @@
 /* GG Bookmark - organizer page logic
- * Rich bookmark manager: folder tree + contents grid,
- * multi-select, drag to reorder/move, delete, create, rename.
+ * Split-view bookmark manager: a folder tree on the left and one or more
+ * folder "panels" on the right. Panels can be opened side by side so the user
+ * can drag bookmarks/folders directly between folders to organize them.
  */
 
 (() => {
   'use strict';
 
   const $ = (s) => document.querySelector(s);
-  const grid = $('#bookmarkGrid');
 
-  const sel = {
-    folders: new Set(),      // selected folder ids
-    items: new Set(),        // selected bookmark ids in current folder
-    reorder: false,          // dragging to reorder within same folder
-    lastClicked: null,
-    dragIds: [],
-    dragFromFolder: null
-  };
+  const DEFAULT_ROOT = 'root________';
 
-  let tree = [];             // full bookmark tree (root children)
-  let folderCount = {};       // folderId -> number of direct children
-  let currentFolderId = 'root________';
+  let tree = [];
+  let folderCount = {};
   let history = [];
   const collapse = new Set();
   let moveMenuCleanup = null;
 
-  // ---------- Helpers ----------
+  let panels = [];
+  let activePanelId = null;
+  let panelSeq = 0;
+
+  const sel = { dragIds: [], dragFromFolder: null };
+
+  function activePanel() {
+    return panels.find((p) => p.id === activePanelId) || panels[0];
+  }
+
   function walkFolders(nodes, cb) {
     (nodes || []).forEach((n) => {
-      if (n.type === 'folder') {
-        cb(n);
-        walkFolders(n.children, cb);
-      }
+      if (n.type === 'folder') { cb(n); walkFolders(n.children, cb); }
     });
   }
 
-  // ---------- Initial load ----------
   async function loadTree() {
     const roots = await browser.bookmarks.getTree();
     tree = roots[0].children || [];
     rebuildFolderCount();
     renderFolderTree();
-    renderContent();
   }
 
-  // Map folderId -> count of its direct children (bookmarks + subfolders).
   function rebuildFolderCount() {
     folderCount = {};
     const walk = (nodes) => {
       (nodes || []).forEach((n) => {
-        if (n.type === 'folder') {
-          folderCount[n.id] = (n.children || []).length;
-          walk(n.children);
-        }
+        if (n.type === 'folder') { folderCount[n.id] = (n.children || []).length; walk(n.children); }
       });
     };
     walk(tree);
   }
 
-  // Re-fetch the bookmark tree, refresh counts and re-render everything.
   async function refresh() {
     const roots = await browser.bookmarks.getTree();
     tree = roots[0].children || [];
     rebuildFolderCount();
     renderFolderTree();
-    renderContent();
+    await Promise.all(panels.map((p) => renderPanel(p)));
   }
 
-  // ---------- Folder tree rendering ----------
+  function folderTitle(id) {
+    if (id === DEFAULT_ROOT) return '书签栏';
+    let found = null;
+    walkFolders(tree, (f) => { if (f.id === id) found = f; });
+    return found ? (found.title || '（未命名）') : '书签';
+  }
+
+  // === FOLDER TREE ===
   function renderFolderTree() {
     const root = $('#folderTree');
     root.innerHTML = '';
-    // 'Bookmarks menu' style quick roots are handled; render all top folders
-    tree.forEach((node) => {
-      if (node.type === 'folder') root.appendChild(buildTreeNode(node, 0));
-    });
+    tree.forEach((node) => { if (node.type === 'folder') root.appendChild(buildTreeNode(node, 0)); });
   }
 
   function buildTreeNode(node, depth) {
@@ -85,24 +80,23 @@
     const bmCount = (node.children || []).filter((c) => c.type === 'bookmark').length;
 
     const row = document.createElement('div');
-    row.className = 'tree-row' + (sel.folders.has(node.id) ? ' selected' : '');
+    row.className = 'tree-row';
     row.style.paddingLeft = (8 + depth * 4) + 'px';
 
     const toggle = document.createElement('span');
     toggle.className = 'tw-toggle' + (collapse.has(node.id) ? ' collapsed' : '');
     toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
+    const setFolderIcon = () => { icon.innerHTML = collapse.has(node.id) ? GG.icon('folder') : GG.icon('folderOpen'); };
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (collapse.has(node.id)) collapse.delete(node.id);
-      else collapse.add(node.id);
+      if (collapse.has(node.id)) collapse.delete(node.id); else collapse.add(node.id);
       const sub = wrap.querySelector(':scope > .tree-children');
-      activateCollapse(sub, node.id);
+      if (sub) sub.classList.toggle('collapsed', collapse.has(node.id));
       setFolderIcon();
     });
 
     const icon = document.createElement('span');
     icon.className = 'tr-icon folder';
-    const setFolderIcon = () => { icon.innerHTML = collapse.has(node.id) ? GG.icon('folder') : GG.icon('folderOpen'); };
     setFolderIcon();
 
     const name = document.createElement('span');
@@ -122,24 +116,23 @@
     row.append(toggle, icon, name, cnt, more);
     row.addEventListener('click', (e) => {
       if (e.target.closest('.tr-more') || e.target.closest('.tw-toggle')) return;
-      selectFolder(node.id);
+      if (!activePanel()) addPanel(node.id); else setPanelFolder(activePanelId, node.id);
     });
     row.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       openCtxMenu(e.clientX, e.clientY, [
-        { label: '打开此文件夹', ic: 'folder', fn: () => selectFolder(node.id) },
+        { label: '在面板中打开', ic: 'folder', fn: () => { if (activePanel()) setPanelFolder(activePanelId, node.id); else addPanel(node.id); } },
+        { label: '新建并列面板', ic: 'folderPlus', fn: () => addPanel(node.id) },
         { label: '在此新建文件夹', ic: 'folderPlus', fn: () => newFolder(node.id) },
         { label: '重命名', ic: 'settings', fn: () => promptRename(node) },
         { label: '删除文件夹', ic: 'trash', fn: () => deleteItem(node), danger: true }
       ]);
     });
-    // allow dropping bookmark onto a folder
-    row.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
-    row.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); moveSelectedTo(node.id); });
+    row.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); row.classList.add('drag-target'); });
+    row.addEventListener('dragleave', () => row.classList.remove('drag-target'));
+    row.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); row.classList.remove('drag-target'); moveSelectedTo(node.id); });
 
     wrap.appendChild(row);
-
     if (childFolders.length) {
       const sub = document.createElement('div');
       sub.className = 'tree-children' + (collapse.has(node.id) ? ' collapsed' : '');
@@ -149,213 +142,268 @@
     return wrap;
   }
 
-  function activateCollapse(sub, id) {
-    if (sub) sub.classList.toggle('collapsed', collapse.has(id));
+  // === PANELS ===
+  function addPanel(folderId) {
+    const p = {
+      id: 'panel_' + (++panelSeq),
+      folderId: folderId || DEFAULT_ROOT,
+      selection: new Set(),
+      lastClicked: null,
+      el: null, head: null, grid: null
+    };
+    panels.push(p);
+    activePanelId = p.id;
+    renderTabs();
+    renderPanels();
+    return p;
   }
 
-  function selectFolder(id) {
-    sel.folders.clear();
-    sel.folders.add(id);
-    currentFolderId = id;
-    sel.items.clear();
-    renderFolderTree();
-    renderContent();
+  function closePanel(id) {
+    const idx = panels.findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    panels.splice(idx, 1);
+    if (activePanelId === id) activePanelId = panels.length ? panels[0].id : null;
+    renderTabs();
+    renderPanels();
+    updateToolbar();
   }
 
-  // ---------- Content rendering ----------
-  async function renderContent() {
-    let children;
-    try {
-      if (currentFolderId === 'root________') {
-        const roots = await browser.bookmarks.getTree();
-        children = roots[0].children || [];
-      } else {
-        children = await browser.bookmarks.getChildren(currentFolderId);
-      }
-    } catch (e) { children = []; }
+  function setPanelFolder(id, folderId) {
+    const p = panels.find((x) => x.id === id);
+    if (!p) return;
+    p.folderId = folderId;
+    p.selection.clear();
+    p.lastClicked = null;
+    renderTabs();
+    renderPanel(p);
+    updateToolbar();
+  }
 
-    // folder title
-    const titleWrap = $('#currentFolderTitle');
-    const span = titleWrap.querySelector('span');
-    let folderTitle = '书签';
-    if (currentFolderId !== 'root________') {
-      try {
-        const arr = await browser.bookmarks.get(currentFolderId);
-        if (arr && arr[0]) folderTitle = arr[0].title;
-      } catch (e) {}
-    }
-    span.textContent = folderTitle;
+  function renderTabs() {
+    const tabs = $('#panelTabs');
+    tabs.innerHTML = '';
+    panels.forEach((p) => {
+      const tab = document.createElement('div');
+      tab.className = 'panel-tab' + (p.id === activePanelId ? ' active' : '');
+      tab.addEventListener('click', (e) => {
+        if (e.target.closest('.tab-close')) return;
+        activePanelId = p.id;
+        renderTabs(); markActivePanel(); updateToolbar();
+      });
+      const ic = document.createElement('span');
+      ic.className = 'tab-icon'; ic.innerHTML = GG.icon('folder');
+      const nm = document.createElement('span');
+      nm.className = 'tab-name'; nm.textContent = folderTitle(p.folderId);
+      const close = document.createElement('span');
+      close.className = 'tab-close'; close.textContent = '×'; close.title = '关闭面板';
+      close.addEventListener('click', (e) => { e.stopPropagation(); closePanel(p.id); });
+      tab.append(ic, nm, close);
+      tabs.appendChild(tab);
+    });
+    const add = document.createElement('button');
+    add.className = 'panel-tab-add'; add.textContent = '+'; add.title = '新建并列面板';
+    add.addEventListener('click', () => addPanel(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
+    tabs.appendChild(add);
+  }
 
+  function markActivePanel() {
+    panels.forEach((p) => { if (p.el) p.el.classList.toggle('active', p.id === activePanelId); });
+  }
+
+  function renderPanels() {
+    const container = $('#panels');
+    container.innerHTML = '';
+    panels.forEach((p) => {
+      const el = document.createElement('div');
+      el.className = 'panel' + (p.id === activePanelId ? ' active' : '');
+      el.dataset.panelId = p.id;
+
+      const head = document.createElement('div');
+      head.className = 'panel-head';
+      const hIcon = document.createElement('span');
+      hIcon.className = 'ph-icon'; hIcon.innerHTML = GG.icon('folder');
+      const hTitle = document.createElement('span');
+      hTitle.className = 'ph-title'; hTitle.textContent = folderTitle(p.folderId);
+      const actions = document.createElement('div');
+      actions.className = 'ph-actions';
+      const btnSwitch = document.createElement('button');
+      btnSwitch.className = 'ph-btn'; btnSwitch.title = '切换此面板文件夹（点选左侧树）';
+      btnSwitch.innerHTML = GG.icon('folderPlus');
+      btnSwitch.addEventListener('click', () => { activePanelId = p.id; renderTabs(); markActivePanel(); updateToolbar(); });
+      const btnClose = document.createElement('button');
+      btnClose.className = 'ph-btn'; btnClose.title = '关闭面板';
+      btnClose.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      btnClose.addEventListener('click', () => closePanel(p.id));
+      actions.append(btnSwitch, btnClose);
+      head.append(hIcon, hTitle, actions);
+
+      const grid = document.createElement('div');
+      grid.className = 'bookmark-grid';
+      grid.dataset.panelId = p.id;
+
+      el.append(head, grid);
+      container.appendChild(el);
+      p.el = el; p.head = head; p.grid = grid;
+      wireGridDrop(p);
+    });
+    markActivePanel();
+    panels.forEach((p) => renderPanel(p));
+  }
+
+  async function renderPanel(p) {
+    if (!p.el) renderPanels();
+    const grid = p.grid;
+    const children = await getChildren(p.folderId);
+    if (p.head) { const t = p.head.querySelector('.ph-title'); if (t) t.textContent = folderTitle(p.folderId); }
     grid.innerHTML = '';
-    if (!children.length) { grid.innerHTML = '<div class="empty">这个文件夹是空的</div>'; return; }
+    if (!children.length) {
+      const e = document.createElement('div');
+      e.className = 'panel-empty-hint';
+      e.textContent = '空文件夹 · 从其他面板拖入书签';
+      grid.appendChild(e);
+      return;
+    }
+    children.forEach((node) => grid.appendChild(buildItem(node, p, children)));
+  }
 
+  async function getChildren(folderId) {
+    try {
+      if (folderId === DEFAULT_ROOT) { const roots = await browser.bookmarks.getTree(); return roots[0].children || []; }
+      return await browser.bookmarks.getChildren(folderId);
+    } catch (e) { return []; }
+  }
+
+  function hostOf(url) { try { return new URL(url).host; } catch (e) { return url; } }
+
+  function buildItem(node, p, siblings) {
     const tpl = $('#bookmarkItemTpl');
-    children.forEach((node) => {
-      const item = tpl.content.cloneNode(true).querySelector('.item');
-      item.dataset.id = node.id;
-      item.dataset.type = node.type;
+    const item = tpl.content.cloneNode(true).querySelector('.item');
+    item.dataset.id = node.id;
+    item.dataset.type = node.type;
+    item.dataset.panelId = p.id;
 
-      if (node.type === 'folder') {
-        item.querySelector('.item-type').textContent = '文件夹';
-        item.querySelector('.item-title').textContent = node.title || '（未命名）';
-        const cnt = folderCount[node.id] !== undefined ? folderCount[node.id] : (node.children || []).length;
-        item.querySelector('.item-url').textContent = `${cnt} 项`;
-        const icon = item.querySelector('.item-icon');
-        icon.innerHTML = GG.icon('folder');
+    if (node.type === 'folder') {
+      item.querySelector('.item-type').textContent = '文件夹';
+      item.querySelector('.item-title').textContent = node.title || '（未命名）';
+      const cnt = folderCount[node.id] !== undefined ? folderCount[node.id] : (node.children || []).length;
+      item.querySelector('.item-url').textContent = `${cnt} 项`;
+      item.querySelector('.item-icon').innerHTML = GG.icon('folder');
+    } else {
+      item.querySelector('.item-type').textContent = '书签';
+      item.querySelector('.item-title').textContent = node.title || hostOf(node.url);
+      item.querySelector('.item-url').textContent = hostOf(node.url);
+      const icon = item.querySelector('.item-icon');
+      const img = document.createElement('img');
+      img.onerror = function () { const s = document.createElement('span'); s.className = 'letter'; s.textContent = (node.title || '?').charAt(0); icon.innerHTML = ''; icon.appendChild(s); };
+      img.src = GG.iconFor(node.url).src;
+      icon.appendChild(img);
+    }
+    if (p.selection.has(node.id)) item.classList.add('selected');
+
+    item.addEventListener('click', (e) => {
+      activePanelId = p.id; markActivePanel();
+      if (e.ctrlKey || e.metaKey) {
+        toggleSelect(p, node.id, item);
+      } else if (e.shiftKey && p.lastClicked) {
+        const ids = siblings.map((c) => c.id);
+        const a = ids.indexOf(p.lastClicked), b = ids.indexOf(node.id);
+        if (a !== -1 && b !== -1) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          for (let i = lo; i <= hi; i++) p.selection.add(ids[i]);
+          renderPanel(p);
+        }
       } else {
-        item.querySelector('.item-type').textContent = '书签';
-        item.querySelector('.item-title').textContent = node.title || (function () { try { return new URL(node.url).host; } catch (e) { return node.url; } })();
-        item.querySelector('.item-url').textContent = (function () { try { return new URL(node.url).host; } catch (e) { return node.url; } })();
-        const icon = item.querySelector('.item-icon');
-        const img = document.createElement('img');
-        img.onerror = function () { const s = document.createElement('span'); s.className = 'letter'; s.textContent = (node.title || '?').charAt(0); icon.innerHTML = ''; icon.appendChild(s); };
-        img.src = GG.iconFor(node.url).src;
-        icon.appendChild(img);
+        p.selection.clear(); p.selection.add(node.id); renderPanel(p);
       }
-
-      if (sel.items.has(node.id)) item.classList.add('selected');
-
-      item.addEventListener('click', (e) => {
-        if (e.ctrlKey || e.metaKey) {
-          toggleSelect(node.id, item);
-        } else if (e.shiftKey && sel.lastClicked) {
-          const ids = children.map((c) => c.id);
-          const a = ids.indexOf(sel.lastClicked); const b = ids.indexOf(node.id);
-          if (a !== -1 && b !== -1) {
-            const [lo, hi] = a < b ? [a, b] : [b, a];
-            for (let i = lo; i <= hi; i++) sel.items.add(ids[i]);
-            renderContent();
-          }
-        } else {
-          if (sel.items.has(node.id)) {
-            // clicking an already selected item clears others but keeps it
-            sel.items.clear();
-            sel.items.add(node.id);
-          } else {
-            sel.items.clear();
-            sel.items.add(node.id);
-          }
-          renderContent();
-        }
-        sel.lastClicked = node.id;
-        updateToolbar();
-      });
-      // double-click opens bookmark or folder
-      item.addEventListener('dblclick', () => {
-        if (node.type === 'bookmark') browser.tabs.create({ url: node.url });
-        else selectFolder(node.id);
-      });
-
-      // right-click context menu for this item (rename / delete / open)
-      item.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (node.type === 'bookmark') {
-          openCtxMenu(e.clientX, e.clientY, [
-            { label: '打开链接', ic: 'external', fn: () => browser.tabs.create({ url: node.url }) },
-            { label: '编辑', ic: 'settings', fn: () => promptRename(node) },
-            { label: '编辑链接', ic: 'external', fn: () => editBookmarkUrl(node) },
-            { label: '删除书签', ic: 'trash', fn: () => deleteItem(node), danger: true }
-          ]);
-        } else {
-          openCtxMenu(e.clientX, e.clientY, [
-            { label: '打开此文件夹', ic: 'folder', fn: () => selectFolder(node.id) },
-            { label: '重命名', ic: 'settings', fn: () => promptRename(node) },
-            { label: '删除文件夹', ic: 'trash', fn: () => deleteItem(node), danger: true }
-          ]);
-        }
-      });
-
-      // dragging: reorder/move bookmarks
-      item.setAttribute('draggable', 'true');
-      item.addEventListener('dragstart', (e) => {
-        // update selection WITHOUT rebuilding the grid (rebuilding would
-        // destroy the dragged node and cancel the drag).
-        if (!sel.items.has(node.id)) {
-          sel.items.clear();
-          sel.items.add(node.id);
-          grid.querySelectorAll('.item.selected').forEach((el) => el.classList.remove('selected'));
-          item.classList.add('selected');
-          updateToolbar();
-        }
-        sel.dragIds = Array.from(sel.items);
-        sel.dragFromFolder = currentFolderId;
-        const url = node.type === 'bookmark' ? node.url : '';
-        e.dataTransfer.setData('text/plain', url);
-        e.dataTransfer.effectAllowed = 'copyMove';
-        item.classList.add('dragging');
-      });
-      item.addEventListener('dragend', () => {
-        item.classList.remove('dragging');
-        sel.dragIds = [];
-        sel.dragFromFolder = null;
-        grid.classList.remove('drop-active');
-      });
-
-      // reordering within grid
-      item.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        if (sel.dragFromFolder === currentFolderId && sel.dragIds.length && !sel.dragIds.includes(node.id)) {
-          const r = item.getBoundingClientRect();
-          const before = e.clientY < r.top + r.height / 2;
-          item.classList.toggle('drop-before', before);
-          item.classList.toggle('drop-after', !before);
-        }
-      });
-      item.addEventListener('dragleave', () => {
-        item.classList.remove('drop-before', 'drop-after');
-      });
-      item.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        item.classList.remove('drop-before', 'drop-after');
-        if (sel.dragFromFolder === currentFolderId && sel.dragIds.length) {
-          reorderWithin(item, e.clientY);
-        }
-      });
-
-      grid.appendChild(item);
+      p.lastClicked = node.id;
+      updateToolbar();
+    });
+    item.addEventListener('dblclick', () => {
+      if (node.type === 'bookmark') browser.tabs.create({ url: node.url });
+      else setPanelFolder(p.id, node.id);
+    });
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      activePanelId = p.id; markActivePanel();
+      if (!p.selection.has(node.id)) { p.selection.clear(); p.selection.add(node.id); renderPanel(p); updateToolbar(); }
+      if (node.type === 'bookmark') {
+        openCtxMenu(e.clientX, e.clientY, [
+          { label: '打开链接', ic: 'external', fn: () => browser.tabs.create({ url: node.url }) },
+          { label: '编辑', ic: 'settings', fn: () => promptRename(node) },
+          { label: '编辑链接', ic: 'external', fn: () => editBookmarkUrl(node) },
+          { label: '删除书签', ic: 'trash', fn: () => deleteItem(node), danger: true }
+        ]);
+      } else {
+        openCtxMenu(e.clientX, e.clientY, [
+          { label: '在此面板打开', ic: 'folder', fn: () => setPanelFolder(p.id, node.id) },
+          { label: '重命名', ic: 'settings', fn: () => promptRename(node) },
+          { label: '删除文件夹', ic: 'trash', fn: () => deleteItem(node), danger: true }
+        ]);
+      }
     });
 
-    // grid-level drop to move into this folder
-    grid.addEventListener('dragover', (e) => {
+    item.setAttribute('draggable', 'true');
+    item.addEventListener('dragstart', (e) => {
+      if (!p.selection.has(node.id)) { p.selection.clear(); p.selection.add(node.id); renderPanel(p); updateToolbar(); }
+      sel.dragIds = Array.from(p.selection);
+      sel.dragFromFolder = p.folderId;
+      e.dataTransfer.setData('text/plain', node.type === 'bookmark' ? node.url : '');
+      e.dataTransfer.setData('application/x-gg-from', p.folderId);
+      e.dataTransfer.effectAllowed = 'copyMove';
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      sel.dragIds = []; sel.dragFromFolder = null;
+      document.querySelectorAll('.panel.drag-target').forEach((el) => el.classList.remove('drag-target'));
+    });
+    item.addEventListener('dragover', (e) => {
       e.preventDefault();
-      grid.classList.add('drop-active');
+      if (sel.dragFromFolder === p.folderId && sel.dragIds.length && !sel.dragIds.includes(node.id)) {
+        const r = item.getBoundingClientRect();
+        const before = e.clientY < r.top + r.height / 2;
+        item.classList.toggle('drop-before', before);
+        item.classList.toggle('drop-after', !before);
+      }
     });
-    grid.addEventListener('dragleave', (e) => {
-      if (!grid.contains(e.relatedTarget)) grid.classList.remove('drop-active');
+    item.addEventListener('dragleave', () => item.classList.remove('drop-before', 'drop-after'));
+    item.addEventListener('drop', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      item.classList.remove('drop-before', 'drop-after');
+      if (sel.dragFromFolder === p.folderId && sel.dragIds.length) reorderWithin(p, node, e.clientY);
     });
+    return item;
+  }
+
+  function toggleSelect(p, id, item) {
+    if (p.selection.has(id)) p.selection.delete(id); else p.selection.add(id);
+    item.classList.toggle('selected', p.selection.has(id));
+    updateToolbar();
+  }
+
+  function wireGridDrop(p) {
+    const grid = p.grid;
+    grid.addEventListener('dragover', (e) => { e.preventDefault(); grid.closest('.panel').classList.add('drag-target'); });
+    grid.addEventListener('dragleave', (e) => { if (!grid.contains(e.relatedTarget)) grid.closest('.panel').classList.remove('drag-target'); });
     grid.addEventListener('drop', (e) => {
       e.preventDefault();
-      grid.classList.remove('drop-active');
-      if (sel.dragFromFolder && sel.dragFromFolder !== currentFolderId && sel.dragIds.length) {
-        moveIdsTo(sel.dragIds, currentFolderId);
-      }
+      grid.closest('.panel').classList.remove('drag-target');
+      if (sel.dragFromFolder && sel.dragFromFolder !== p.folderId && sel.dragIds.length) moveIdsTo(sel.dragIds, p.folderId);
+      else if (sel.dragFromFolder === p.folderId && sel.dragIds.length) moveIdsToEndOfFolder(p);
     });
-
-    updateToolbar();
   }
 
-  function toggleSelect(id, item) {
-    if (sel.items.has(id)) sel.items.delete(id);
-    else sel.items.add(id);
-    item.classList.toggle('selected', sel.items.has(id));
-    updateToolbar();
-  }
-
-  // ---------- Reorder within folder ----------
-  async function reorderWithin(refItem, clientY) {
+  // === REORDER / MOVE / DELETE ===
+  async function reorderWithin(p, refItem, clientY) {
+    const folderId = p.folderId;
     if (!refItem || refItem.dataset.type === 'folder') return;
     const rect = refItem.getBoundingClientRect();
     const insertBefore = clientY < rect.top + rect.height / 2;
-
     const ids = Array.from(sel.dragIds);
     if (!ids.length) return;
-
-    const children = await browser.bookmarks.getChildren(currentFolderId);
+    const children = await browser.bookmarks.getChildren(folderId);
     const order = children.map((c) => c.id);
     const prevOrder = order.slice();
-
     const rest = order.filter((id) => !ids.includes(id));
     let targetIndex = rest.indexOf(refItem.dataset.id);
     if (targetIndex === -1) return;
@@ -363,87 +411,66 @@
     const beforeId = rest[targetIndex] !== undefined ? rest[targetIndex] : undefined;
     const finalOrder = [];
     for (const id of rest) {
-      if (beforeId !== undefined && id === beforeId) {
-        finalOrder.push(...ids);
-        finalOrder.push(id);
-      } else {
-        finalOrder.push(id);
-      }
+      if (beforeId !== undefined && id === beforeId) { finalOrder.push(...ids); finalOrder.push(id); }
+      else finalOrder.push(id);
     }
     if (beforeId === undefined) finalOrder.push(...ids);
     const seen = new Set();
     const clean = finalOrder.filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
-
     if (JSON.stringify(clean) === JSON.stringify(prevOrder)) return;
-
-    // Apply left-to-right: place each item at its final index. Earlier slots
-    // are filled first, so later moves never disturb already-placed items.
-    for (let i = 0; i < clean.length; i++) {
-      await browser.bookmarks.move(clean[i], { parentId: currentFolderId, index: i }).catch(() => {});
-    }
-    pushHistory({ type: 'reorder', folderId: currentFolderId, prev: prevOrder, target: clean });
+    for (let i = 0; i < clean.length; i++) await browser.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {});
+    pushHistory({ type: 'reorder', folderId, prev: prevOrder, target: clean });
     GG.toast.show('已重新排序', 'success');
-    renderContent();
+    renderPanel(p);
   }
 
-  // ---------- Moving selected across folders ----------
+  async function moveIdsToEndOfFolder(p) {
+    const folderId = p.folderId;
+    const ids = Array.from(sel.dragIds);
+    if (!ids.length) return;
+    const children = await browser.bookmarks.getChildren(folderId);
+    const order = children.map((c) => c.id);
+    const rest = order.filter((id) => !ids.includes(id));
+    const finalOrder = rest.concat(ids);
+    const seen = new Set();
+    const clean = finalOrder.filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
+    let changed = false;
+    for (let i = 0; i < clean.length; i++) { if (order[i] !== clean[i]) changed = true; await browser.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {}); }
+    if (changed) { pushHistory({ type: 'reorder', folderId, prev: order, target: clean }); GG.toast.show('已移动到底部', 'success'); }
+    renderPanel(p);
+  }
+
   async function moveIdsTo(ids, targetFolder) {
     if (!ids.length) return;
-    const prev = {}; // id -> prevParent
-    for (const id of ids) {
-      const arr = await browser.bookmarks.get(id).catch(() => []).then((a) => a);
-      if (arr[0]) prev[id] = arr[0].parentId;
-    }
+    const prev = {};
+    for (const id of ids) { const arr = await browser.bookmarks.get(id).catch(() => []); if (arr[0]) prev[id] = arr[0].parentId; }
     let moved = 0;
-    for (const id of ids) {
-      try { await browser.bookmarks.move(id, { parentId: targetFolder }); moved++; } catch (e) {}
-    }
-    if (moved) {
-      pushHistory({ type: 'move', prev, target: targetFolder, ids });
-      GG.toast.show(`已移动 ${moved} 项`, 'success');
-      refresh();
-    }
+    for (const id of ids) { try { await browser.bookmarks.move(id, { parentId: targetFolder }); moved++; } catch (e) {} }
+    if (moved) { pushHistory({ type: 'move', prev, target: targetFolder, ids }); GG.toast.show(`已移动 ${moved} 项`, 'success'); refresh(); }
   }
   function moveSelectedTo(folderId) {
-    if (sel.items.size) {
-      const ids = Array.from(sel.items);
-      moveIdsTo(ids, folderId);
-    }
+    const p = activePanel();
+    if (p && p.selection.size) moveIdsTo(Array.from(p.selection), folderId);
   }
 
-  // ---------- Delete ----------
   async function deleteSelected() {
-    const ids = Array.from(sel.items);
+    const p = activePanel();
+    if (!p) return;
+    const ids = Array.from(p.selection);
     if (!ids.length) return;
     if (!confirm(`确定删除选中的 ${ids.length} 项？此操作会删除书签。`)) return;
-    // capture full data for undo (recursively)
     const captured = {};
-    for (const id of ids) {
-      captured[id] = await captureNode(id);
-    }
+    for (const id of ids) captured[id] = await captureNode(id);
     let del = 0;
     await Promise.all(ids.map((id) => browser.bookmarks.removeTree(id).then(() => { del++; }, () => {})));
-    if (del) {
-      pushHistory({ type: 'delete', captured });
-      GG.toast.show(`已删除 ${del} 项`, 'success');
-      sel.items.clear();
-      refresh();
-    }
+    if (del) { pushHistory({ type: 'delete', captured }); GG.toast.show(`已删除 ${del} 项`, 'success'); p.selection.clear(); refresh(); }
   }
 
-  // Deep-capture a bookmark node (recursively) for possible restore
   async function captureNode(id) {
     const arr = await browser.bookmarks.get(id).catch(() => []);
     if (!arr[0]) return null;
     const node = arr[0];
-    return {
-      parentId: node.parentId,
-      title: node.title,
-      url: node.url,
-      type: node.type,
-      index: node.index,
-      children: node.type === 'folder' ? (await browser.bookmarks.getChildren(id)) : null
-    };
+    return { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: node.type === 'folder' ? (await browser.bookmarks.getChildren(id)) : null };
   }
   async function restoreNode(data) {
     if (!data) return;
@@ -452,24 +479,19 @@
     } else {
       const created = await browser.bookmarks.create({ parentId: data.parentId, title: data.title }).catch(() => {});
       if (created) {
-        // recreate children (this is a shallow version; deeper nesting not perfectly restored)
         for (let i = 0; i < (data.children || []).length; i++) {
           const child = data.children[i];
-          if (child.type === 'bookmark') {
-            await browser.bookmarks.create({ parentId: created.id, title: child.title, url: child.url }).catch(() => {});
-          } else {
+          if (child.type === 'bookmark') { await browser.bookmarks.create({ parentId: created.id, title: child.title, url: child.url }).catch(() => {}); }
+          else {
             const f = await browser.bookmarks.create({ parentId: created.id, title: child.title }).catch(() => {});
-            if (f && child.children) for (const gc of child.children) {
-              if (gc.type === 'bookmark') await browser.bookmarks.create({ parentId: f.id, title: gc.title, url: gc.url }).catch(() => {});
-            }
+            if (f && child.children) for (const gc of child.children) { if (gc.type === 'bookmark') await browser.bookmarks.create({ parentId: f.id, title: gc.title, url: gc.url }).catch(() => {}); }
           }
         }
       }
     }
   }
 
-  // ---------- New folder ----------
-  async function newFolder(parentId = currentFolderId) {
+  async function newFolder(parentId) {
     const name = prompt('文件夹名称：', '新文件夹');
     if (!name || !name.trim()) return;
     const node = await browser.bookmarks.create({ parentId, title: name.trim() });
@@ -477,7 +499,6 @@
     refresh();
   }
 
-  // ---------- Rename ----------
   function openRename(node) {
     const nameEl = document.querySelector(`.tree-node[data-id="${node.id}"] .tr-name`);
     if (!nameEl) return;
@@ -486,10 +507,7 @@
     input.value = node.title || '';
     nameEl.appendChild(input);
     input.focus(); input.select();
-    input.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') { await commitRename(node, input.value); }
-      if (e.key === 'Escape') { nameEl.textContent = node.title; }
-    });
+    input.addEventListener('keydown', async (e) => { if (e.key === 'Enter') commitRename(node, input.value); if (e.key === 'Escape') nameEl.textContent = node.title; });
     input.addEventListener('blur', () => commitRename(node, input.value));
   }
   async function commitRename(node, title) {
@@ -497,22 +515,18 @@
     if (!t) { renderFolderTree(); return; }
     const oldTitle = node.title;
     if (t !== oldTitle) {
-      try {
-        await browser.bookmarks.update(node.id, { title: t });
-        pushHistory({ type: 'rename', id: node.id, was: oldTitle });
-        GG.toast.show('已重命名', 'success');
-        renderFolderTree();
-      } catch (e) { renderFolderTree(); }
+      try { await browser.bookmarks.update(node.id, { title: t }); pushHistory({ type: 'rename', id: node.id, was: oldTitle }); GG.toast.show('已重命名', 'success'); renderFolderTree(); }
+      catch (e) { renderFolderTree(); }
     }
   }
 
-  // ---------- Folder menu ----------
   function openFolderMenu(anchor, node) {
     const menu = $('#moveMenu');
     menu.innerHTML = '';
     menu.classList.add('open');
     const items = [
-      { label: '打开此文件夹', ic: 'folder', fn: () => selectFolder(node.id) },
+      { label: '在面板中打开', ic: 'folder', fn: () => { if (activePanel()) setPanelFolder(activePanelId, node.id); else addPanel(node.id); } },
+      { label: '新建并列面板', ic: 'folderPlus', fn: () => addPanel(node.id) },
       { label: '在此新建文件夹', ic: 'folderPlus', fn: () => newFolder(node.id) },
       { label: '重命名', ic: 'settings', fn: () => renameFolder(node) },
       { label: '删除文件夹', ic: 'trash', fn: () => deleteFolder(node), danger: true }
@@ -532,7 +546,6 @@
   }
   function renameFolder(node) { openRename(node); }
 
-  // ---------- Generic right-click context menu ----------
   function openCtxMenu(x, y, items) {
     const menu = $('#ctxMenu');
     menu.innerHTML = '';
@@ -558,33 +571,22 @@
     setTimeout(() => document.addEventListener('click', ctxMenuCleanup), 0);
   }
 
-  // Rename via prompt (works for folders and bookmarks anywhere).
   async function promptRename(node) {
     const name = prompt('名称：', node.title || '');
     if (!name || !name.trim() || name.trim() === node.title) return;
-    try {
-      await browser.bookmarks.update(node.id, { title: name.trim() });
-      pushHistory({ type: 'rename', id: node.id, was: node.title });
-      GG.toast.show('已重命名', 'success');
-      refresh();
-    } catch (e) { GG.toast.show('重命名失败', 'error'); }
+    try { await browser.bookmarks.update(node.id, { title: name.trim() }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已重命名', 'success'); refresh(); }
+    catch (e) { GG.toast.show('重命名失败', 'error'); }
   }
 
-  // Edit a bookmark's URL (hyperlink).
   async function editBookmarkUrl(node) {
     const url = prompt('链接地址：', node.url || '');
     if (!url || !url.trim()) return;
     const trimmed = url.trim();
     if (trimmed === node.url) return;
-    try {
-      await browser.bookmarks.update(node.id, { url: trimmed });
-      pushHistory({ type: 'rename', id: node.id, was: node.title });
-      GG.toast.show('已更新链接', 'success');
-      refresh();
-    } catch (e) { GG.toast.show('更新链接失败', 'error'); }
+    try { await browser.bookmarks.update(node.id, { url: trimmed }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已更新链接', 'success'); refresh(); }
+    catch (e) { GG.toast.show('更新链接失败', 'error'); }
   }
 
-  // Delete a single node (folder recursively, or bookmark).
   async function deleteItem(node) {
     if (node.type === 'folder') {
       if (!confirm(`确定删除文件夹“${node.title}”及其所有内容？`)) return;
@@ -594,10 +596,7 @@
     } else {
       if (!confirm(`确定删除书签“${node.title || node.url}”？`)) return;
       await browser.bookmarks.remove(node.id).catch(() => {});
-      pushHistory({
-        type: 'delete',
-        captured: { [node.id]: { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: null } }
-      });
+      pushHistory({ type: 'delete', captured: { [node.id]: { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: null } } });
       GG.toast.show('已删除', 'success');
     }
     refresh();
@@ -617,52 +616,32 @@
     setTimeout(() => document.addEventListener('click', moveMenuCleanup), 0);
   }
 
-  // ---------- Undo ----------
+  // === UNDO ===
   function pushHistory(entry) {
     history.push(entry);
     if (history.length > 30) history.shift();
     updateToolbar();
   }
-
   async function undo() {
     const entry = history.pop();
     if (!entry) return;
-    if (entry.type === 'delete') {
-      for (const id of Object.keys(entry.captured)) {
-        await restoreNode(entry.captured[id]);
-      }
-      GG.toast.show('已撤销删除', 'success');
-      refresh();
-    } else if (entry.type === 'move') {
-      for (const id of entry.prev) {
-        await browser.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {});
-      }
-      GG.toast.show('已撤销移动', 'success');
-      refresh();
-    } else if (entry.type === 'reorder') {
-      await applyOrderSilent(entry.folderId, entry.prev);
-      GG.toast.show('已撤销排序', 'success');
-      renderContent();
-    } else if (entry.type === 'rename') {
-      await browser.bookmarks.update(entry.id, { title: entry.was }).catch(() => {});
-      renderFolderTree();
-    } else if (entry.type === 'deleteFolder') {
-      if (entry.parentId) {
-        await browser.bookmarks.create({ parentId: entry.parentId, title: entry.title }).catch(() => {});
-      }
-      renderFolderTree();
-    }
+    if (entry.type === 'delete') { for (const id of Object.keys(entry.captured)) await restoreNode(entry.captured[id]); GG.toast.show('已撤销删除', 'success'); refresh(); }
+    else if (entry.type === 'move') { for (const id of entry.prev) await browser.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {}); GG.toast.show('已撤销移动', 'success'); refresh(); }
+    else if (entry.type === 'reorder') { await applyOrderSilent(entry.folderId, entry.prev); GG.toast.show('已撤销排序', 'success'); refresh(); }
+    else if (entry.type === 'rename') { await browser.bookmarks.update(entry.id, { title: entry.was }).catch(() => {}); renderFolderTree(); refresh(); }
+    else if (entry.type === 'deleteFolder') { if (entry.parentId) await browser.bookmarks.create({ parentId: entry.parentId, title: entry.title }).catch(() => {}); renderFolderTree(); }
     updateToolbar();
   }
   async function applyOrderSilent(folderId, order) {
     await Promise.all(order.map((id, i) => browser.bookmarks.move(id, { parentId: folderId, index: i })));
   }
 
-  // ---------- Wildcards ----------
   function updateToolbar() {
-    $('#btnDelete').disabled = sel.items.size === 0;
+    const p = activePanel();
+    const n = p ? p.selection.size : 0;
+    $('#btnDelete').disabled = n === 0;
     $('#btnUndo').disabled = history.length === 0;
-    $('#selectedInfo').textContent = sel.items.size ? `已选 ${sel.items.size} 项` : '未选中';
+    $('#selectedInfo').textContent = n ? `已选 ${n} 项` : '未选中';
   }
 
   function wireButtons() {
@@ -673,27 +652,21 @@
     $('#btnDelete').addEventListener('click', deleteSelected);
     $('#btnHome').addEventListener('click', () => browser.tabs.update({ url: './../newtab/newtab.html' }));
     $('#btnNewFolder').innerHTML = GG.icon('folderPlus');
-    $('#btnNewFolder').addEventListener('click', () => newFolder(currentFolderId));
-    // global keyboard
+    $('#btnNewFolder').addEventListener('click', () => newFolder(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Delete' && sel.items.size) { e.preventDefault(); deleteSelected(); }
+      if (e.key === 'Delete' && activePanel() && activePanel().selection.size) { e.preventDefault(); deleteSelected(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
     });
   }
 
-  // ---------- Init ----------
   async function init() {
     wireButtons();
     await loadTree();
-    // default select first root folder found
-    let first = null;
-    walkFolders(tree, (fnode) => { if (!first) first = fnode.id; });
-    if (first) {
-      currentFolderId = first;
-      sel.folders.add(first);
-      renderFolderTree();
-      renderContent();
-    }
+    let first = null, second = null;
+    walkFolders(tree, (fnode) => { if (!first) first = fnode.id; else if (!second) second = fnode.id; });
+    if (first) addPanel(first);
+    if (second) addPanel(second);
+    if (!first && !second) addPanel(DEFAULT_ROOT);
   }
 
   document.addEventListener('DOMContentLoaded', init);
