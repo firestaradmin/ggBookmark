@@ -211,10 +211,17 @@
   }
 
   function openMenu(menu, anchor) {
-    document.querySelectorAll('.tile-menu.open, .card-menu.open').forEach((m) => m.classList.remove('open'));
+    document.querySelectorAll('.tile-menu.open, .card-menu.open').forEach((m) => {
+      m.classList.remove('open');
+      m.closest('.card')?.classList.remove('menu-open');
+    });
     menu.classList.add('open');
+    menu.closest('.card')?.classList.add('menu-open');
     const close = (e) => {
-      if (!menu.contains(e.target) && e.target !== anchor) menu.classList.remove('open');
+      if (!menu.contains(e.target) && e.target !== anchor) {
+        menu.classList.remove('open');
+        menu.closest('.card')?.classList.remove('menu-open');
+      }
       document.removeEventListener('click', close);
     };
     setTimeout(() => document.addEventListener('click', close), 0);
@@ -227,7 +234,7 @@
       b.className = 'menu-item' + (danger ? ' danger' : '');
       b.innerHTML = GG.icon(ic) + '<span></span>';
       b.querySelector('span').textContent = label;
-      b.addEventListener('click', () => { menu.classList.remove('open'); handler(); });
+      b.addEventListener('click', () => { menu.classList.remove('open'); menu.closest('.card')?.classList.remove('menu-open'); handler(); });
       menu.appendChild(b);
     };
     add('打开', 'external', () => browser.tabs.create({ url: bm.url }));
@@ -264,11 +271,44 @@
   }
 
   // ---------- Card rendering ----------
+  // Each app may carry an explicit `col` (column index) so the user can freely
+  // place cards into any column. When the column count changes or `col` is
+  // missing/out-of-range, we re-balance by keeping existing assignments and
+  // appending overflow cards to the emptiest column.
+  function assignColumns(cards, cols) {
+    // clamp/normalize existing col values; returns true if any col changed
+    const buckets = Array.from({ length: cols }, () => []);
+    let dirty = false;
+    cards.forEach((app) => {
+      let c = (typeof app.col === 'number') ? app.col : -1;
+      if (c < 0 || c >= cols) c = -1;
+      if (c === -1) {
+        // place into the shortest column (keeps two-card same-column possible)
+        let minIdx = 0;
+        for (let i = 1; i < cols; i++) if (buckets[i].length < buckets[minIdx].length) minIdx = i;
+        c = minIdx;
+      }
+      if (app.col !== c) { app.col = c; dirty = true; }
+      buckets[c].push(app);
+    });
+    // sort each column by the global cardOrder
+    const orderMap = new Map(cardOrder.map((o, i) => [o.appId, i]));
+    buckets.forEach((list) => {
+      list.sort((a, b) => {
+        const ia = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
+        const ib = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
+        return ia === ib ? a.title.localeCompare(b.title, 'zh') : ia - ib;
+      });
+    });
+    return { buckets, dirty };
+  }
+
   function renderCards() {
     const cards = reorderCards();
     grid.innerHTML = '';
     const tpl = $('#cardTpl');
     const cols = computedColumnCount();
+    const { buckets, dirty } = assignColumns(cards, cols);
     // build column wrappers
     const colEls = [];
     for (let i = 0; i < cols; i++) {
@@ -278,41 +318,44 @@
       colEls.push(c);
       grid.appendChild(c);
     }
-    // distribute cards round-robin so each column holds a vertical stack
-    cards.forEach((app, idx) => {
-      const card = tpl.content.cloneNode(true).querySelector('.card');
-      card.dataset.appId = app.id;
-      card.dataset.folderId = app.folderId;
-      card.dataset.recursive = app.recursive ? '1' : '0';
-      card.querySelector('.card-title').textContent = app.title;
-      const body = card.querySelector('.card-body');
-      body.dataset.appId = app.id;
-      // per-card body height: 'auto' = fit all children
-      const fit = app.fitMode === 'auto';
-      if (fit) body.dataset.fit = 'auto';
-      else if (app.bodyH) body.style.setProperty('--card-body-h', app.bodyH + 'px');
-      setupCardMenu(card, app);
-      setupCardDrag(card, app);
-      buildTiles(card, app.folderId, app.recursive);
-      // apply exclusions
-      applyExclusions(card, app);
-      // resize handle (vertical only)
-      setupCardResize(card, app);
-      // fit button
-      const fitBtn = card.querySelector('.card-fit');
-      fitBtn.innerHTML = GG.icon('fit');
-      fitBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
-        persist();
-        renderCards();
+    // place each card into its assigned column
+    buckets.forEach((list, colIdx) => {
+      list.forEach((app) => {
+        const card = buildCardEl(app, tpl);
+        colEls[colIdx].appendChild(card);
       });
-      // compact mode (auto or user-set) - computed after tiles exist
-      applyCompact(card, app);
-      const targetCol = idx % cols;
-      colEls[targetCol].appendChild(card);
     });
     if (cards.length) grid.dataset.empty = 'false'; else grid.dataset.empty = 'true';
+    // persist normalized col assignments asynchronously (avoid feedback loop)
+    if (dirty) persist();
+  }
+
+  function buildCardEl(app, tpl) {
+    const card = tpl.content.cloneNode(true).querySelector('.card');
+    card.dataset.appId = app.id;
+    card.dataset.folderId = app.folderId;
+    card.dataset.recursive = app.recursive ? '1' : '0';
+    card.querySelector('.card-title').textContent = app.title;
+    const body = card.querySelector('.card-body');
+    body.dataset.appId = app.id;
+    const fit = app.fitMode === 'auto';
+    if (fit) body.dataset.fit = 'auto';
+    else if (app.bodyH) body.style.setProperty('--card-body-h', app.bodyH + 'px');
+    setupCardMenu(card, app);
+    setupCardDrag(card, app);
+    buildTiles(card, app.folderId, app.recursive);
+    applyExclusions(card, app);
+    setupCardResize(card, app);
+    const fitBtn = card.querySelector('.card-fit');
+    fitBtn.innerHTML = GG.icon('fit');
+    fitBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
+      persist();
+      renderCards();
+    });
+    applyCompact(card, app);
+    return card;
   }
 
   function applyExclusions(card, app) {
@@ -396,12 +439,13 @@
     return Math.max(1, Math.min(Math.floor((w + gap) / (cw + gap)), 6));
   }
 
-  // Set every card to auto-fit (height expands to show all children)
+  // Set every card to auto-fit (height expands to show all children).
+  // Preserve each card's explicit compact preference; auto-detected (undefined)
+  // values will recompute against the new full height during render.
   function fitAllCards() {
     state.apps.forEach((a) => {
       if (a.categoryId === state.activeCategory) {
         a.fitMode = 'auto';
-        a.compact = false;
       }
     });
     persist();
@@ -418,7 +462,7 @@
       b.className = 'menu-item';
       b.innerHTML = GG.icon(ic) + '<span></span>';
       b.querySelector('span').textContent = label;
-      b.addEventListener('click', () => { menu.classList.remove('open'); handler(); });
+      b.addEventListener('click', () => { menu.classList.remove('open'); menu.closest('.card')?.classList.remove('menu-open'); handler(); });
       menu.appendChild(b);
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
@@ -446,43 +490,137 @@
     persist().then(renderAll);
   }
 
-  // ---------- Card header drag (reorder) ----------
+  // ---------- Card header drag (reorder + free column placement) ----------
+  // Cards are dragged via their header grip. They can be dropped:
+  //   - before/after another card (decided by pointer position within target)
+  //   - into an empty column (drop zone rendered at column bottoms)
+  // The dragged card's `col` is set to the target column so it stays there.
+  const CARD_MIME = 'application/x-gg-card';
+
   function setupCardDrag(card, app) {
     const handle = card.querySelector('.card-drag');
     handle.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', app.id);
+      e.dataTransfer.setData(CARD_MIME, app.id);
+      e.dataTransfer.setData('text/plain', app.id); // fallback for some Firefox configurations
       e.dataTransfer.effectAllowed = 'move';
       card.classList.add('dragging');
     });
     handle.addEventListener('dragend', () => {
       card.classList.remove('dragging');
       document.querySelectorAll('.card.drop-target').forEach((c) => c.classList.remove('drop-target'));
+      document.querySelectorAll('.grid-col.col-drop').forEach((c) => c.classList.remove('col-drop'));
     });
     card.addEventListener('dragover', (e) => {
-      if (e.target.closest('.card-drag')) return;
+      if (!e.dataTransfer.types.includes(CARD_MIME)) return;
+      if (e.target.closest('.card-drag') === handle) return;
       e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
       card.classList.add('drop-target');
+      // visual cue: top half = insert before, bottom half = insert after
+      const r = card.getBoundingClientRect();
+      const before = (e.clientY - r.top) < r.height / 2;
+      card.dataset.dropPos = before ? 'before' : 'after';
     });
     card.addEventListener('dragleave', (e) => {
-      if (!card.contains(e.relatedTarget)) card.classList.remove('drop-target');
+      if (!card.contains(e.relatedTarget)) {
+        card.classList.remove('drop-target');
+        delete card.dataset.dropPos;
+      }
     });
     card.addEventListener('drop', (e) => {
+      if (!e.dataTransfer.types.includes(CARD_MIME)) return;
       e.preventDefault();
+      e.stopPropagation();
       card.classList.remove('drop-target');
-      const draggedId = e.dataTransfer.getData('text/plain');
-      if (!draggedId || draggedId === app.id) return;
-      reorderAppTo(draggedId, app.id);
+      const draggedId = e.dataTransfer.getData(CARD_MIME) || e.dataTransfer.getData('text/plain');
+      if (!draggedId || draggedId === app.id) { delete card.dataset.dropPos; return; }
+      const before = card.dataset.dropPos === 'before';
+      delete card.dataset.dropPos;
+      moveCardTo(draggedId, app.col, app.id, before);
     });
   }
 
-  function reorderAppTo(draggedId, beforeId) {
-    const prev = cardOrder.slice();
-    cardOrder = cardOrder.filter((o) => o.appId !== draggedId);
-    const before = cardOrder.findIndex((o) => o.appId === beforeId);
-    if (before === -1) cardOrder.push({ appId: draggedId });
-    else cardOrder.splice(before, 0, { appId: draggedId });
-    pushUndo({ type: 'reorder', from: prev, to: cardOrder.slice() });
+  // Move a card into `col` at a position relative to `anchorId` (or end of col
+  // when anchorId is null). Updates both the per-app `col` and the linear
+  // `cardOrder` so the within-column order is preserved across renders.
+  function moveCardTo(draggedId, col, anchorId, before) {
+    const draggedApp = state.apps.find((a) => a.id === draggedId);
+    if (!draggedApp) return;
+    const prevOrder = cardOrder.slice();
+    const prevCol = draggedApp.col;
+    // 1) update card's column
+    draggedApp.col = col;
+    // 2) rebuild cardOrder so that, within `col`, the dragged card sits in the
+    //    right place. Strategy: build per-column ordered lists from current
+    //    cardOrder + apps, then re-insert dragged at desired spot, then
+    //    flatten back to a new cardOrder.
+    const cols = computedColumnCount();
+    const safeCol = Math.max(0, Math.min(col, cols - 1));
+    // gather all active apps grouped by their col (in current cardOrder order)
+    const active = activeCards();
+    const orderMap = new Map(cardOrder.map((o, i) => [o.appId, i]));
+    active.sort((a, b) => {
+      const ia = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
+      const ib = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
+      return ia === ib ? a.title.localeCompare(b.title, 'zh') : ia - ib;
+    });
+    const buckets = Array.from({ length: cols }, () => []);
+    active.forEach((a) => {
+      let c = (typeof a.col === 'number') ? a.col : 0;
+      if (c < 0 || c >= cols) c = 0;
+      buckets[c].push(a);
+    });
+    // remove dragged from its (possibly old) bucket
+    for (const list of buckets) {
+      const i = list.findIndex((a) => a.id === draggedId);
+      if (i !== -1) { list.splice(i, 1); break; }
+    }
+    // insert into target bucket
+    const target = buckets[safeCol];
+    if (!anchorId) {
+      target.push(draggedApp);
+    } else {
+      const idx = target.findIndex((a) => a.id === anchorId);
+      if (idx === -1) target.push(draggedApp);
+      else target.splice(before ? idx : idx + 1, 0, draggedApp);
+    }
+    // flatten: column-major order so future renders keep this layout
+    const newOrder = [];
+    buckets.forEach((list) => list.forEach((a) => newOrder.push({ appId: a.id })));
+    cardOrder = newOrder;
+    pushUndo({ type: 'reorder', from: prevOrder, to: cardOrder.slice() });
     persist().then(renderCards);
+  }
+
+  // Allow dropping into empty space of a column (moves card to that column,
+  // appended at the bottom).
+  function enableColumnDrop() {
+    grid.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer.types.includes(CARD_MIME)) return;
+      const col = e.target.closest('.grid-col');
+      if (!col) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      col.classList.add('col-drop');
+    });
+    grid.addEventListener('dragleave', (e) => {
+      const col = e.target.closest('.grid-col');
+      if (col && !col.contains(e.relatedTarget)) col.classList.remove('col-drop');
+    });
+    grid.addEventListener('drop', (e) => {
+      if (!e.dataTransfer.types.includes(CARD_MIME)) return;
+      const col = e.target.closest('.grid-col');
+      if (!col) return;
+      // only treat as column drop when not dropped onto a card (card has its own handler + stopPropagation)
+      if (e.target.closest('.card')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      col.classList.remove('col-drop');
+      const draggedId = e.dataTransfer.getData(CARD_MIME) || e.dataTransfer.getData('text/plain');
+      if (!draggedId) return;
+      const colIdx = Number(col.dataset.col);
+      moveCardTo(draggedId, colIdx, null, false);
+    });
   }
 
   // ---------- Tile drag between cards/out ----------
@@ -731,6 +869,7 @@
     renderSearchEngine();
     wireButtons();
     enableGridDrag();
+    enableColumnDrop();
     // close menu on outside click
     document.addEventListener('click', (e) => {
       const menu = $('#seMenu');
