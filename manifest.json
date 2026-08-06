@@ -1,5 +1,5 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "GG Bookmark - 书签起始页",
   "version": "1.0.0",
   "description": "现代风格的 Firefox 书签起始页：分类网格卡片、可自定义背景、书签整理器。",
@@ -7,7 +7,9 @@
     "bookmarks",
     "storage",
     "tabs",
-    "alarms",
+    "alarms"
+  ],
+  "host_permissions": [
     "<all_urls>"
   ],
   "browser_specific_settings": {
@@ -21,24 +23,23 @@
     "96": "icons/GGBookmarkLOGO.ico"
   },
   "background": {
-    "scripts": [
-      "lib/store.js",
-      "lib/sync.js"
-    ]
+    "service_worker": "lib/background.js"
   },
   "options_ui": {
     "page": "pages/newtab/newtab.html",
     "open_in_tab": true
   },
   "web_accessible_resources": [
-    "lib/*"
+    {
+      "resources": ["lib/*"],
+      "matches": ["<all_urls>"]
+    }
   ],
   "chrome_url_overrides": {
     "newtab": "pages/newtab/newtab.html"
   },
-  "browser_action": {
+  "action": {
     "default_title": "GG Bookmark",
-    "default_popup": "pages/popup/popup.html",
     "default_icon": "icons/GGBookmarkLOGO.ico"
   }
 }

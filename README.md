@@ -63,17 +63,29 @@ web-ext run --source-dir .
 web-ext lint --source-dir .
 ```
 
+## 在 Chrome / Edge 中加载
+
+1. 打开 `chrome://extensions`（Edge 为 `edge://extensions`）。
+2. 右上角开启“开发者模式”。
+3. 点击“加载已解压的扩展程序”，选择本项目根目录。
+4. 新标签页会被替换为 GG Bookmark 起始页；点击工具栏图标可打开设置页。
+
+> 本扩展同时兼容 Firefox 与 Chrome：采用 **Manifest V3**，`background` 使用
+> service worker（`lib/background.js`，通过 `importScripts` 复用 `store.js`/`sync.js`），
+> 并用 `lib/browser-polyfill.min.js` 把 Chrome 的回调式 `chrome.*` API 统一为
+> Promise 化的 `browser.*`，页面与后台代码无需区分浏览器。
+
 ## 目录结构
 
 ```
-manifest.json            扩展清单
+manifest.json            扩展清单（Manifest V3）
+lib/browser-polyfill.min.js  WebExtension API 兼容层（Firefox / Chrome 通用）
+lib/background.js        MV3 service worker 入口（importScripts 复用以下两个）
 lib/store.js             默认设置、搜索引擎、书签工具
 js/shared.js             共享图标、Toast 提示
 css/base.css             全局暗色 / 毛玻璃主题
-pages/newtab/            起始页（新标签页）
+pages/newtab/            起始页（新标签页 + 设置面板）
 pages/organizer/         书签整理器
-pages/settings/          设置页
-pages/popup/             工具栏弹出菜单
 icons/                   图标与搜索引擎图标
 ```
 
