@@ -412,8 +412,19 @@
     else if (app.bodyH) body.style.setProperty('--card-body-h', app.bodyH + 'px');
     setupCardMenu(card, app);
     setupCardDrag(card, app);
-    buildTiles(card, app.folderId, app.recursive);
-    applyExclusions(card, app);
+    if (!app.folderId) {
+      card.classList.add('unconfigured');
+      const body = card.querySelector('.card-body');
+      body.innerHTML = '';
+      const ph = document.createElement('button');
+      ph.className = 'card-set-folder';
+      ph.innerHTML = GG.icon('folderPlus') + '<span>设置文件夹</span>';
+      ph.addEventListener('click', (e) => { e.stopPropagation(); openPicker(card, app); });
+      body.appendChild(ph);
+    } else {
+      buildTiles(card, app.folderId, app.recursive);
+      applyExclusions(card, app);
+    }
     setupCardResize(card, app);
     const fitBtn = card.querySelector('.card-fit');
     const syncFitBtn = () => {
@@ -1009,6 +1020,31 @@
 
   // Right-click on empty grid space -> "new card" menu placed in that column.
   let gridCtxEl = null;
+  function createBlankCard(col) {
+    const newApp = {
+      id: 'app_' + Date.now(),
+      title: '新卡片',
+      categoryId: state.activeCategory,
+      folderId: null,
+      recursive: false
+    };
+    if (typeof col === 'number') newApp.col = col;
+    else {
+      const cols = computedColumnCount();
+      const counts = Array.from({ length: cols }, () => 0);
+      state.apps.forEach((a) => {
+        const c = (typeof a.col === 'number') ? a.col : -1;
+        if (c >= 0 && c < cols) counts[c]++;
+      });
+      let minIdx = 0;
+      for (let i = 1; i < cols; i++) if (counts[i] < counts[minIdx]) minIdx = i;
+      newApp.col = minIdx;
+    }
+    pushUndo({ type: 'removeCard', app: newApp, existed: false });
+    state.apps.push(newApp);
+    appendOrder(newApp.id);
+    persist().then(renderCards);
+  }
   function columnFromEvent(e) {
     const col = e.target.closest('.grid-col');
     if (col) return Number(col.dataset.col);
@@ -1035,7 +1071,7 @@
     const b = document.createElement('button');
     b.className = 'menu-item';
     b.innerHTML = GG.icon('plus') + '<span>新建卡片</span>';
-    b.addEventListener('click', () => { closeGridMenu(); openPicker(null, null, col); });
+    b.addEventListener('click', () => { closeGridMenu(); createBlankCard(col); });
     menu.appendChild(b);
     document.body.appendChild(menu);
     gridCtxEl = menu;
@@ -1116,7 +1152,7 @@
     const btnAdd = $('#btnAddCard');
     btnAdd.innerHTML = GG.icon('addCard');
     btnAdd.title = '卡片添加：新增一个书签卡片';
-    btnAdd.addEventListener('click', () => openPicker());
+    btnAdd.addEventListener('click', () => createBlankCard());
     $('#pickerClose').addEventListener('click', closePicker);
     $('#pickerConfirm').addEventListener('click', confirmPick);
     // search
