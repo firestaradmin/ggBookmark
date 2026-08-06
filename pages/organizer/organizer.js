@@ -211,7 +211,15 @@
       // dragging: reorder/move bookmarks
       item.setAttribute('draggable', 'true');
       item.addEventListener('dragstart', (e) => {
-        if (!sel.items.has(node.id)) { sel.items.clear(); sel.items.add(node.id); renderContent(); }
+        // update selection WITHOUT rebuilding the grid (rebuilding would
+        // destroy the dragged node and cancel the drag).
+        if (!sel.items.has(node.id)) {
+          sel.items.clear();
+          sel.items.add(node.id);
+          grid.querySelectorAll('.item.selected').forEach((el) => el.classList.remove('selected'));
+          item.classList.add('selected');
+          updateToolbar();
+        }
         sel.dragIds = Array.from(sel.items);
         sel.dragFromFolder = currentFolderId;
         const url = node.type === 'bookmark' ? node.url : '';
@@ -227,11 +235,24 @@
       });
 
       // reordering within grid
-      item.addEventListener('dragover', (e) => e.preventDefault());
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (sel.dragFromFolder === currentFolderId && sel.dragIds.length && !sel.dragIds.includes(node.id)) {
+          const r = item.getBoundingClientRect();
+          const before = e.clientY < r.top + r.height / 2;
+          item.classList.toggle('drop-before', before);
+          item.classList.toggle('drop-after', !before);
+        }
+      });
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drop-before', 'drop-after');
+      });
       item.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        item.classList.remove('drop-before', 'drop-after');
         if (sel.dragFromFolder === currentFolderId && sel.dragIds.length) {
-          reorderWithin(node, e.clientY);
+          reorderWithin(item, e.clientY);
         }
       });
 
@@ -265,8 +286,7 @@
   }
 
   // ---------- Reorder within folder ----------
-  async function reorderWithin(refNode, clientY) {
-    const refItem = refNode.closest('.item');
+  async function reorderWithin(refItem, clientY) {
     if (!refItem || refItem.dataset.type === 'folder') return;
     const rect = refItem.getBoundingClientRect();
     const insertBefore = clientY < rect.top + rect.height / 2;
@@ -298,16 +318,14 @@
 
     if (JSON.stringify(clean) === JSON.stringify(prevOrder)) return;
 
-    await moveOrderInto(currentFolderId, clean);
+    // Apply left-to-right: place each item at its final index. Earlier slots
+    // are filled first, so later moves never disturb already-placed items.
+    for (let i = 0; i < clean.length; i++) {
+      await browser.bookmarks.move(clean[i], { parentId: currentFolderId, index: i }).catch(() => {});
+    }
     pushHistory({ type: 'reorder', folderId: currentFolderId, prev: prevOrder, target: clean });
     GG.toast.show('已重新排序', 'success');
     renderContent();
-  }
-
-  function moveOrderInto(folderId, desiredOrder) {
-    return Promise.all(desiredOrder.map((id, index) =>
-      browser.bookmarks.move(id, { parentId: folderId, index }).catch(() => {})
-    ));
   }
 
   // ---------- Moving selected across folders ----------
