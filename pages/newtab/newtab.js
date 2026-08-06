@@ -524,16 +524,16 @@
     const v = state.settings.compactAll;
     if (v === true) {
       btn.innerHTML = GG.icon('compactOn');
-      btn.title = '紧凑模式：全部开启（点击关闭/自动）';
+      btn.title = '当前紧凑模式：固定开启（点击关闭/自动）';
       btn.classList.add('active');
     } else if (v === false) {
       btn.innerHTML = GG.icon('compactOff');
-      btn.title = '紧凑模式：全部关闭（点击恢复自动）';
-      btn.classList.add('active');
+      btn.title = '当前紧凑模式：固定关闭（点击恢复自动）';
+      btn.classList.remove('active');
     } else {
       btn.innerHTML = GG.icon('compactAuto');
-      btn.title = '紧凑模式：跟随各卡片（点击全部开启）';
-      btn.classList.remove('active');
+      btn.title = '当前紧凑模式：自动模式（点击全部开启）';
+      btn.classList.add('active');
     }
   }
   function toggleCompactAll() {
