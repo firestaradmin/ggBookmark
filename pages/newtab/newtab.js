@@ -324,6 +324,11 @@
         const card = buildCardEl(app, tpl);
         colEls[colIdx].appendChild(card);
       });
+      // flexible filler so the column always has droppable empty space
+      // (reaching the bottom of the grid), not just the 18px gaps.
+      const fill = document.createElement('div');
+      fill.className = 'col-fill';
+      colEls[colIdx].appendChild(fill);
     });
     if (cards.length) grid.dataset.empty = 'false'; else grid.dataset.empty = 'true';
     // persist normalized col assignments asynchronously (avoid feedback loop)
@@ -592,8 +597,9 @@
     persist().then(renderCards);
   }
 
-  // Allow dropping into empty space of a column (moves card to that column,
-  // appended at the bottom).
+  // Allow dropping anywhere inside a column. The whole column highlights as a
+  // drop target (even when hovering over its cards) so the user gets clear
+  // feedback and can release the mouse anywhere in the column's space.
   function enableColumnDrop() {
     grid.addEventListener('dragover', (e) => {
       if (!e.dataTransfer.types.includes(CARD_MIME)) return;
@@ -601,6 +607,10 @@
       if (!col) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
+      // highlight the column under the pointer; clear the others
+      document.querySelectorAll('.grid-col.col-drop').forEach((c) => {
+        if (c !== col) c.classList.remove('col-drop');
+      });
       col.classList.add('col-drop');
     });
     grid.addEventListener('dragleave', (e) => {
@@ -611,7 +621,9 @@
       if (!e.dataTransfer.types.includes(CARD_MIME)) return;
       const col = e.target.closest('.grid-col');
       if (!col) return;
-      // only treat as column drop when not dropped onto a card (card has its own handler + stopPropagation)
+      // When dropped onto a card, let the card's own handler manage the
+      // before/after placement (it stops propagation). Otherwise, dropping in
+      // the column's empty space moves the card to that column (appended).
       if (e.target.closest('.card')) return;
       e.preventDefault();
       e.stopPropagation();
