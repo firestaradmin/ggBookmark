@@ -134,15 +134,15 @@
       }
     });
   }
-  // 仅快照被卡片引用的书签文件夹子树（而非整个 Firefox 书签树），减小体积
-  async function snapshotBookmarks(apps) {
-    const ids = Array.from(new Set((apps || []).map((a) => a.folderId).filter(Boolean)));
+  // 快照整个浏览器的书签树（menu/toolbar/unfiled 三个容器及其全部子孙），用于完整备份与还原。
+  async function snapshotBookmarks() {
+    const roots = await browser.bookmarks.getTree();
+    const containers = (roots[0] && roots[0].children) || [];
     const subs = [];
-    for (const id of ids) {
-      try {
-        const sub = await browser.bookmarks.getSubTree(id);
-        if (sub && sub[0]) subs.push(sub[0]);
-      } catch (e) { /* 文件夹可能已不存在 */ }
+    for (const c of containers) {
+      if (c.type !== 'folder') continue;
+      // 直接以容器本身作为子树根，导入时其 children 会被整体倒入用户选择的目标文件夹
+      subs.push({ node: c, containerId: c.id, path: [] });
     }
     return subs;
   }
@@ -155,13 +155,16 @@
     }
     return false;
   }
-  // 在“其他书签”下创建“GG Bookmark 导入”根，重建导出的书签子树，返回 { newPathToId, idToPath }
-  async function recreateBookmarks(trees) {
+  // 重建导出的书签子树：将其内部内容（文件夹 + 书签）直接导入到用户选定的目标文件夹下，
+  // 不再额外包裹一层顶层文件夹，保留原有的内部子文件夹结构。返回 { newPathToId, idToPath }
+  async function recreateBookmarks(trees, targetParentId) {
     const idToPath = new Map();
     const oldPathToId = new Map();
-    (trees || []).forEach((sub) => indexBookmarkPaths(sub, [], oldPathToId, idToPath));
+    (trees || []).forEach((sub) => {
+      indexBookmarkPaths(sub.node, [], oldPathToId, idToPath);
+    });
 
-    const top = await browser.bookmarks.create({ title: 'GG Bookmark 导入', parentId: 'unfiled_____' });
+    const root = targetParentId || 'toolbar_____';
     const newPathToId = new Map();
 
     async function recreate(nodes, parentId, parentPath) {
@@ -176,10 +179,72 @@
         }
       }
     }
+
     for (const sub of (trees || [])) {
-      await recreate(sub.children || [], top.id, []);
+      const node = sub.node;
+      if (!node) continue;
+      // 直接将顶层文件夹的内部内容导入到目标文件夹下，避免多包一层同名文件夹
+      await recreate(node.children || [], root, []);
     }
     return { newPathToId, idToPath };
+  }
+
+  // 展示书签文件夹选择对话框，返回用户选定的文件夹 id（取消则返回 null）
+  async function pickBookmarkFolder() {
+    const tree = await browser.bookmarks.getTree();
+    const roots = (tree[0] && tree[0].children) || [];
+    const options = [];
+    (function walk(nodes, depth) {
+      for (const n of nodes) {
+        if (n.type === 'folder') {
+          options.push({ id: n.id, title: '　'.repeat(depth) + n.title, depth });
+          if (n.children) walk(n.children, depth + 1);
+        }
+      }
+    })(roots, 0);
+
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'gg-modal-overlay';
+      const box = document.createElement('div');
+      box.className = 'gg-modal';
+      const sel = document.createElement('select');
+      sel.className = 'gg-folder-select';
+      sel.size = Math.min(options.length, 12);
+      for (const o of options) {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = o.title;
+        if (o.id === 'toolbar_____') opt.selected = true;
+        sel.appendChild(opt);
+      }
+      const tip = document.createElement('div');
+      tip.className = 'gg-modal-tip';
+      tip.textContent = '选择导入书签的目标文件夹（将保留原有内部结构）：';
+      const row = document.createElement('div');
+      row.className = 'gg-modal-row';
+      const ok = document.createElement('button');
+      ok.className = 'btn';
+      ok.textContent = '确定';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn btn-ghost';
+      cancel.textContent = '取消';
+      row.appendChild(ok);
+      row.appendChild(cancel);
+      box.appendChild(tip);
+      box.appendChild(sel);
+      box.appendChild(row);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      function close(val) {
+        overlay.remove();
+        resolve(val);
+      }
+      ok.addEventListener('click', () => close(sel.value));
+      cancel.addEventListener('click', () => close(null));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    });
   }
   // 根据旧 id 映射到新创建的文件夹 id（按路径匹配）
   function remapFolderIds(apps, idToPath, newPathToId) {
@@ -323,9 +388,14 @@
       cfg.categories = stored.categories || [];
       cfg.orderByCat = stored.orderByCat || {};
       cfg.activeCat = stored.activeCat || null;
-      // 导出被卡片引用的书签子树（不含整个 Firefox 书签树）
+      // 导出被卡片引用的书签子树（不含整个 Firefox 书签树），并记录原始容器与完整路径
       try {
-        cfg.bookmarks = await snapshotBookmarks(stored.apps || []);
+        const snaps = await snapshotBookmarks();
+        cfg.bookmarks = snaps.map((s) => ({
+          node: s.node,
+          containerId: s.containerId,
+          path: s.path
+        }));
       } catch (e) {
         cfg.bookmarks = null;
       }
@@ -371,8 +441,14 @@
           }
           if (!skipBookmarks) {
             try {
-              const { newPathToId, idToPath } = await recreateBookmarks(imported.bookmarks);
-              apps = remapFolderIds(apps, idToPath, newPathToId);
+              const target = await pickBookmarkFolder();
+              if (target == null) {
+                skipBookmarks = true;
+                GG.toast.show('已取消书签导入，仅导入设置与卡片', 'info');
+              } else {
+                const { newPathToId, idToPath } = await recreateBookmarks(imported.bookmarks, target);
+                apps = remapFolderIds(apps, idToPath, newPathToId);
+              }
             } catch (e) {
               GG.toast.show('书签导入失败：' + (e && e.message ? e.message : '未知错误'), 'error');
             }
