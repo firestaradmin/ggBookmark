@@ -348,6 +348,19 @@
 }
 .tile:hover { background: var(--glass-strong); }
 .tile.tile-dragging { opacity: .35; }
+/* drop indicator: accent bar above/below the hovered tile */
+.tile.tile-drop { position: relative; }
+.tile.tile-drop::before {
+  content: "";
+  position: absolute;
+  left: 8px; right: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(79, 124, 255, 0.7);
+}
+.tile.tile-drop[data-drop-pos="before"]::before { top: -2px; }
+.tile.tile-drop[data-drop-pos="after"]::before { bottom: -2px; }
 .tile-empty { text-align: center; color: var(--text-faint); font-size: 12px; padding: 18px 0; }
 .tile-menu {
   top: 36px; right: 8px;

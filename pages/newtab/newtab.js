@@ -676,7 +676,9 @@
     });
   }
 
-  // ---------- Tile drag between cards/out ----------
+  // ---------- Tile drag (reorder within a card / move between cards) ----------
+  let dragTile = null;   // the tile element being dragged
+
   function enableGridDrag() {
     grid.addEventListener('dragstart', (e) => {
       const tile = e.target.closest('.tile');
@@ -686,19 +688,34 @@
         e.dataTransfer.setData('text/plain', tile.dataset.url || '');
         e.dataTransfer.effectAllowed = 'copyMove';
         tile.classList.add('tile-dragging');
+        dragTile = tile;
       }
     });
     grid.addEventListener('dragend', (e) => {
       if (e.target.closest && e.target.closest('.tile')) e.target.closest('.tile').classList.remove('tile-dragging');
+      dragTile = null;
       document.querySelectorAll('.card.drop-target').forEach((c) => c.classList.remove('drop-target'));
+      document.querySelectorAll('.tile.tile-drop').forEach((t) => t.classList.remove('tile-drop'));
     });
-    // allow dropping onto card body to move bookmark
+    // show a drop indicator as the tile hovers over another tile
     grid.addEventListener('dragover', (e) => {
       const card = e.target.closest('.card');
-      if (card && e.dataTransfer.types.includes('bookmark-id')) {
-        e.preventDefault();
-        card.classList.add('drop-target');
+      if (!card || !e.dataTransfer.types.includes('bookmark-id')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      card.classList.add('drop-target');
+      document.querySelectorAll('.tile.tile-drop').forEach((t) => t.classList.remove('tile-drop'));
+      const over = e.target.closest('.tile');
+      if (over && over !== dragTile) {
+        const r = over.getBoundingClientRect();
+        const before = (e.clientY - r.top) < r.height / 2;
+        over.classList.add('tile-drop');
+        over.dataset.dropPos = before ? 'before' : 'after';
       }
+    });
+    grid.addEventListener('dragleave', (e) => {
+      const card = e.target.closest('.card');
+      if (card && !card.contains(e.relatedTarget)) card.classList.remove('drop-target');
     });
     grid.addEventListener('drop', (e) => {
       const card = e.target.closest('.card');
@@ -706,8 +723,39 @@
       const bmId = e.dataTransfer.getData('bookmark-id');
       const bmUrl = e.dataTransfer.getData('text/plain');
       if (!bmId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll('.tile.tile-drop').forEach((t) => t.classList.remove('tile-drop'));
+      const srcCard = dragTile && dragTile.closest('.card');
+      // reorder within the same card
+      if (srcCard === card) {
+        const over = e.target.closest('.tile');
+        const tiles = Array.from(card.querySelectorAll('.tile'));
+        let targetIndex = tiles.length;
+        if (over && over !== dragTile) {
+          const idx = tiles.indexOf(over);
+          targetIndex = over.dataset.dropPos === 'before' ? idx : idx + 1;
+        }
+        reorderBookmarkInCard(bmId, card.dataset.folderId, targetIndex);
+        return;
+      }
+      // otherwise move the bookmark into the other card's folder
       moveBookmark(bmId, card.dataset.folderId, bmUrl, card);
     });
+  }
+
+  // Reorder a bookmark within its folder by moving it to `targetIndex`.
+  async function reorderBookmarkInCard(bmId, folderId, targetIndex) {
+    const children = await browser.bookmarks.getChildren(folderId).catch(() => null);
+    if (!children) return;
+    const ids = children.filter((c) => c.type === 'bookmark').map((c) => c.id);
+    const cur = ids.indexOf(bmId);
+    if (cur === -1) return;
+    if (cur < targetIndex) targetIndex--;
+    if (cur === targetIndex) { renderCards(); return; }
+    browser.bookmarks.move(bmId, { parentId: folderId, index: targetIndex }).then(() => {
+      renderCards();
+    }, () => GG.toast.show('排序失败', 'error'));
   }
 
   async function moveBookmark(bmId, targetFolderId, bmUrl, card) {
