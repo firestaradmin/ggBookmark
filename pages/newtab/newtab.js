@@ -395,7 +395,7 @@
     const fitBtn = card.querySelector('.card-fit');
     const syncFitBtn = () => {
       const auto = app.fitMode === 'auto';
-      fitBtn.innerHTML = GG.icon(auto ? 'fitAuto' : 'fitFixed');
+      fitBtn.innerHTML = GG.icon(auto ? 'heightAuto' : 'heightAutoOff');
       fitBtn.title = auto ? '适应高度：开（点击固定高度）' : '适应高度：关（点击自动适应）';
       fitBtn.classList.toggle('active', auto);
     };
@@ -403,6 +403,22 @@
     fitBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
+      persist();
+      renderCards();
+    });
+    const compactBtn = card.querySelector('.card-compact');
+    const syncCompactBtnCard = () => {
+      const ic = app.compact === true ? 'compactOn' : (app.compact === false ? 'compactOff' : 'compactAuto');
+      const title = app.compact === true ? '当前紧凑模式：固定开启（点击关闭/自动）'
+        : (app.compact === false ? '当前紧凑模式：固定关闭（点击恢复自动）' : '当前紧凑模式：自动模式（点击全部开启）');
+      compactBtn.innerHTML = GG.icon(ic);
+      compactBtn.title = title;
+      compactBtn.classList.toggle('active', app.compact !== false);
+    };
+    syncCompactBtnCard();
+    compactBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      app.compact = app.compact === undefined ? true : (app.compact ? false : undefined);
       persist();
       renderCards();
     });
@@ -605,19 +621,6 @@
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
     add('包含子文件夹', 'folderPlus', () => { app.recursive = !app.recursive; persist(); renderCards(); });
-    add(app.fitMode === 'auto' ? '固定高度（垂直拖动调整）' : '自动适应全部子项', 'fit', () => {
-      app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
-      persist(); renderCards();
-    });
-    const compactState = app.compact === undefined ? '自动' : (app.compact ? '开启' : '关闭');
-    const compactIcon = app.compact === true ? 'compactOn' : (app.compact === false ? 'compactOff' : 'compactAuto');
-    const compactTitle = app.compact === true ? '当前紧凑模式：固定开启（点击关闭/自动）'
-      : (app.compact === false ? '当前紧凑模式：固定关闭（点击恢复自动）' : '当前紧凑模式：自动模式（点击全部开启）');
-    add(`紧凑模式：${compactState}`, compactIcon, () => {
-      // cycle: undefined(auto) -> true -> false -> undefined
-      app.compact = app.compact === undefined ? true : (app.compact ? false : undefined);
-      persist(); renderCards();
-    }, false, compactTitle);
     add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim()) { app.title = n.trim(); persist(); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
     more.innerHTML = GG.icon('settings');
@@ -1039,10 +1042,10 @@
     $('#btnSettings').innerHTML = GG.icon('settings');
     $('#btnSettings').addEventListener('click', () => browser.runtime.openOptionsPage());
     const btnOrg = $('#btnOrganize');
-    btnOrg.innerHTML = GG.icon('grid');
+    btnOrg.innerHTML = GG.icon('bookmark');
     btnOrg.addEventListener('click', () => browser.tabs.create({ url: browser.runtime.getURL('pages/organizer/organizer.html') }));
     const btnAdd = $('#btnAddCard');
-    btnAdd.innerHTML = GG.icon('folderPlus');
+    btnAdd.innerHTML = GG.icon('addCard');
     btnAdd.title = '卡片添加：新增一个书签卡片';
     btnAdd.addEventListener('click', () => openPicker());
     $('#pickerClose').addEventListener('click', closePicker);

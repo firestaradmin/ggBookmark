@@ -296,10 +296,18 @@
 }
 .card-more { width: 30px; height: 30px; padding: 0; border-radius: 8px; flex-shrink: 0; }
 .card-more svg { width: 16px; height: 16px; }
+.card-compact {
+  width: 30px; height: 30px; padding: 0;
+  border-radius: 8px; flex-shrink: 0;
+  color: var(--text);
+}
+.card-compact svg { width: 16px; height: 16px; }
+.card-compact:hover { color: var(--text); background: var(--glass-strong); }
+.card-compact.active { color: #fff; background: rgba(79, 124, 255, 0.22); box-shadow: inset 0 0 0 1px rgba(79,124,255,.5); }
 .card-fit {
   width: 30px; height: 30px; padding: 0;
   border-radius: 8px; flex-shrink: 0;
-  color: var(--text-dim);
+  color: var(--text);
 }
 .card-fit svg { width: 16px; height: 16px; }
 .card-fit:hover { color: var(--text); background: var(--glass-strong); }
