@@ -1004,17 +1004,34 @@
 
   // Right-click on empty grid space -> "new card" menu placed in that column.
   let gridCtxEl = null;
+  function columnFromEvent(e) {
+    const col = e.target.closest('.grid-col');
+    if (col) return Number(col.dataset.col);
+    // fallback: pick the column whose horizontal band contains the cursor
+    const cols = Array.from(grid.querySelectorAll('.grid-col'));
+    if (!cols.length) return null;
+    const x = e.clientX;
+    let best = 0, bestDist = Infinity;
+    cols.forEach((c, i) => {
+      const r = c.getBoundingClientRect();
+      const d = x < r.left ? r.left - x : (x > r.right ? x - r.right : 0);
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    return best;
+  }
   function openGridMenu(e) {
     closeGridMenu();
-    const col = e.target.closest('.grid-col');
-    if (!col) return;
     if (e.target.closest('.card')) return; // don't trigger over a card
+    const col = columnFromEvent(e);
+    if (col == null) return;
+    const colEl = grid.querySelector(`.grid-col[data-col="${col}"]`);
+    if (colEl) colEl.classList.add('col-target');
     const menu = document.createElement('div');
     menu.className = 'menu glass grid-ctx';
     const b = document.createElement('button');
     b.className = 'menu-item';
     b.innerHTML = GG.icon('plus') + '<span>新建卡片</span>';
-    b.addEventListener('click', () => { closeGridMenu(); openPicker(null, null, Number(col.dataset.col)); });
+    b.addEventListener('click', () => { closeGridMenu(); openPicker(null, null, col); });
     menu.appendChild(b);
     document.body.appendChild(menu);
     gridCtxEl = menu;
@@ -1025,6 +1042,7 @@
   }
   function closeGridMenu() {
     if (gridCtxEl) { gridCtxEl.remove(); gridCtxEl = null; }
+    grid.querySelectorAll('.grid-col.col-target').forEach((c) => c.classList.remove('col-target'));
   }
 
   function confirmPick() {
@@ -1039,6 +1057,7 @@
       });
     } else {
       // new card
+      const pickedCol = (currentPick && typeof currentPick.col === 'number') ? currentPick.col : null;
       browser.bookmarks.get(selectedFolderId).then((arr) => {
         const folder = arr && arr[0];
         const title = folder ? folder.title : '新卡片';
@@ -1050,7 +1069,7 @@
           recursive: $('#pickerRecursive').checked
         };
         // place the new card in the column that was right-clicked (if any)
-        if (currentPick && typeof currentPick.col === 'number') newApp.col = currentPick.col;
+        if (pickedCol != null) newApp.col = pickedCol;
         pushUndo({ type: 'removeCard', app: newApp, existed: false });
         state.apps.push(newApp);
         appendOrder(newApp.id);
