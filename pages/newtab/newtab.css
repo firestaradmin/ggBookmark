@@ -256,6 +256,7 @@
 }
 .card-fit svg { width: 16px; height: 16px; }
 .card-fit:hover { color: var(--text); background: var(--glass-strong); }
+.card-fit.active { color: #fff; background: rgba(79, 124, 255, 0.22); box-shadow: inset 0 0 0 1px rgba(79,124,255,.5); }
 .card-menu {
   top: 44px;
   left: 100%;

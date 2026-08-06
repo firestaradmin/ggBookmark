@@ -393,7 +393,13 @@
     applyExclusions(card, app);
     setupCardResize(card, app);
     const fitBtn = card.querySelector('.card-fit');
-    fitBtn.innerHTML = GG.icon('fit');
+    const syncFitBtn = () => {
+      const auto = app.fitMode === 'auto';
+      fitBtn.innerHTML = GG.icon(auto ? 'fitAuto' : 'fitFixed');
+      fitBtn.title = auto ? '适应高度：开（点击固定高度）' : '适应高度：关（点击自动适应）';
+      fitBtn.classList.toggle('active', auto);
+    };
+    syncFitBtn();
     fitBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
