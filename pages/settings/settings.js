@@ -167,15 +167,36 @@
     const root = targetParentId || 'toolbar_____';
     const newPathToId = new Map();
 
+    // 缓存父子关系，避免重复查询
+    const childrenCache = new Map();
+    async function getChildren(parentId) {
+      if (!childrenCache.has(parentId)) {
+        childrenCache.set(parentId, await browser.bookmarks.getChildren(parentId));
+      }
+      return childrenCache.get(parentId);
+    }
+    // 在同一个父文件夹下查找同名（含书签/文件夹）的现有节点，重复使用以避免重复
+    async function findExisting(parentId, node) {
+      const kids = await getChildren(parentId);
+      const title = node.title || node.url;
+      return kids.find((k) => {
+        if (node.type === 'folder') return k.type === 'folder' && k.title === node.title;
+        return k.type === 'bookmark' && k.title === (node.title || node.url) && k.url === node.url;
+      });
+    }
+
     async function recreate(nodes, parentId, parentPath) {
       for (const n of nodes) {
         if (n.type === 'folder') {
-          const f = await browser.bookmarks.create({ title: n.title, parentId, type: 'folder' });
+          let f = await findExisting(parentId, n);
+          if (!f) f = await browser.bookmarks.create({ title: n.title, parentId, type: 'folder' });
           const p = parentPath.concat(n.title);
           newPathToId.set(p.join(PATH_SEP), f.id);
           if (n.children) await recreate(n.children, f.id, p);
         } else if (n.type === 'bookmark' && n.url) {
-          await browser.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
+          if (!(await findExisting(parentId, n))) {
+            await browser.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
+          }
         }
       }
     }
