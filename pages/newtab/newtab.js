@@ -78,17 +78,42 @@
   let syncTimer = null;
   function maybeSync(mode) {
     if (!GG.Sync) return;
-    const sync = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
-    const triggers = Array.isArray(sync.triggers) ? sync.triggers : [];
-    if (!sync.enabled || !triggers.includes(mode)) return;
+    const raw = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
+    const sync = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers(raw) : raw);
+    if (!sync.enabled || !sync.triggers.includes(mode)) return;
     // 防抖：短时间内多次变更只同步一次
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       syncTimer = null;
-      GG.Sync.upload().catch((e) => {
-        console.warn('[gg] 自动同步失败：', e && e.message);
-      });
+      doUpload('自动同步（' + mode + '）');
     }, 1500);
+  }
+
+  // 统一的手动/自动上传入口：上传并弹出结果提示
+  async function doUpload(label) {
+    if (!GG.Sync) return;
+    try {
+      await GG.Sync.upload();
+      GG.toast.show((label ? label + '：' : '') + '已上传到服务器', 'success');
+    } catch (e) {
+      GG.toast.show((label ? label + '失败：' : '上传失败：') + (e && e.message), 'error');
+    }
+  }
+
+  // 页面级定时同步兜底：即使后台 alarm 未触发，只要新标签页打开即可按间隔上传
+  let intervalSyncTimer = null;
+  function startIntervalSync() {
+    if (intervalSyncTimer) { clearInterval(intervalSyncTimer); intervalSyncTimer = null; }
+    const raw = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
+    const sync = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers(raw) : raw);
+    if (!sync.enabled || !sync.triggers.includes('interval')) return;
+    const ms = Math.max(1, Number(sync.intervalMinutes) || 30) * 60 * 1000;
+    console.log('[gg-sync] 页面级定时同步已启动，间隔(ms)=' + ms);
+    intervalSyncTimer = setInterval(() => {
+      const s = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers((state.settings && state.settings.sync) || GG.DEFAULTS.sync) : (state.settings && state.settings.sync));
+      if (!s.enabled || !s.triggers.includes('interval')) { startIntervalSync(); return; }
+      doUpload('定时同步').catch(() => {});
+    }, ms);
   }
 
   // ---------- Search ----------
@@ -1306,6 +1331,7 @@
     wireButtons();
     wireImportFolder();
     if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
+    startIntervalSync();
     enableGridDrag();
     enableColumnDrop();
     // close menus on outside click / scroll / escape
@@ -1346,9 +1372,18 @@
         if (prevWidth !== colWidth) renderCards();  // rebalance columns
         else renderCards(); // refresh compact state from global setting
         maybeSync('settingsChange');
+        startIntervalSync();
       }
       if (cardsChanged) {
         reloadAndRender();
+      }
+    });
+    // 后台定时同步的结果通知（仅影响提示，不影响同步本身）
+    browser.runtime.onMessage.addListener((msg) => {
+      if (!msg || msg.type !== 'gg-sync-log') return;
+      if (GG.toast) {
+        if (msg.ok) GG.toast.show(msg.msg || '定时同步成功', 'success');
+        else GG.toast.show(msg.msg || '定时同步失败', 'error');
       }
     });
     // folder renamed elsewhere -> sync card title
