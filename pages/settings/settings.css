@@ -97,6 +97,8 @@
   font-variant-numeric: tabular-nums;
 }
 .field.actions { gap: 10px; }
+.data-ops { flex-wrap: wrap; }
+.data-ops .btn { flex: 1; justify-content: center; min-width: 90px; }
 .field.col { flex-direction: column; align-items: stretch; }
 .field.col label:first-child { width: auto; }
 .preset-grid {

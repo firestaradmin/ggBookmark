@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GG 起始页</title>
+  <title>(￣︶￣)↗ GO GO 起始页</title>
+  <link rel="icon" href="../../icons/GGBookmarkLOGO.ico">
   <link rel="stylesheet" href="../../css/base.css">
   <link rel="stylesheet" href="../settings/settings.css">
   <link rel="stylesheet" href="newtab.css">
@@ -176,12 +177,19 @@
           </div>
         </section>
 
-        <section class="group">
-          <h2>数据</h2>
-          <div class="field actions">
-            <button class="btn" id="btnResetBg">重置背景</button>
-          </div>
-        </section>
+          <section class="group">
+            <h2>数据</h2>
+            <div class="field actions">
+              <button class="btn" id="btnResetBg">重置背景</button>
+            </div>
+            <div class="field actions data-ops">
+              <button class="btn" id="btnExport">导出配置</button>
+              <button class="btn" id="btnImport">导入配置</button>
+              <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+              <button class="btn danger" id="btnClear">清除配置</button>
+            </div>
+            <div class="hint">导出为 JSON 文件备份；导入会覆盖当前设置；清除会恢复全部默认并删除本地配置。</div>
+          </section>
 
         <div class="footer">
           <button class="btn primary" id="btnSave">保存设置</button>

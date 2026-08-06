@@ -1206,6 +1206,16 @@
     persist();
   }
 
+  // 重新从存储加载数据并渲染，但不写回（用于外部导入/清除后的同步）
+  async function reloadAndRender() {
+    await loadPersistent();
+    renderCats();
+    renderCards();
+    render(state.history.length);
+    const cat = document.querySelector(`.cat[data-id="${state.activeCategory}"]`);
+    if (cat) cat.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
   // ---------- Init ----------
   async function init() {
     await loadPersistent();
@@ -1238,9 +1248,11 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatMenu(); closeGridMenu(); closeTileMenu(); } });
     renderAll();
 
-    // listen for settings changes from settings page
+    // listen for settings / data changes from settings page (import / clear)
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.settings) {
+      if (area !== 'local') return;
+      const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat'].some((k) => k in changes);
+      if (changes.settings) {
         const prevWidth = colWidth;
         state.settings = Object.assign({}, GG.DEFAULTS, changes.settings.newValue || {});
         colWidth = state.settings.cardWidth || 320;
@@ -1250,6 +1262,9 @@
         syncViewMenu();
         if (prevWidth !== colWidth) renderCards();  // rebalance columns
         else renderCards(); // refresh compact state from global setting
+      }
+      if (cardsChanged) {
+        reloadAndRender();
       }
     });
     // folder renamed elsewhere -> sync card title
@@ -1266,6 +1281,13 @@
       }
     });
     // open menu close
+
+    // reload everything when config imported/cleared from settings page
+    browser.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.type === 'gg-config-imported') {
+        reloadAndRender();
+      }
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);

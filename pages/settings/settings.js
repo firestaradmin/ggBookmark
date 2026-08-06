@@ -220,6 +220,77 @@
       await GG.saveSettings(settings);
       GG.toast.show('已重置背景', 'success');
     });
+
+    // 导出配置为 JSON 文件（不含壁纸图片数据，但包含主页面卡片配置）
+    $('#btnExport').addEventListener('click', async () => {
+      const stored = await browser.storage.local.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
+      const cfg = {
+        version: GG.VERSION,
+        settings: Object.assign({}, stored.settings || {})
+      };
+      // 不导出壁纸数据（通常是体积很大的 data URL）
+      delete cfg.settings.backgroundImage;
+      cfg.apps = stored.apps || [];
+      cfg.categories = stored.categories || [];
+      cfg.orderByCat = stored.orderByCat || {};
+      cfg.activeCat = stored.activeCat || null;
+      const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ggbookmark-config.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      GG.toast.show('已导出配置', 'success');
+    });
+
+    // 导入配置：触发文件选择，读入后合并并应用
+    $('#btnImport').addEventListener('click', () => $('#importFile').click());
+    $('#importFile').addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const imported = JSON.parse(text);
+        if (!imported || typeof imported !== 'object') throw new Error('invalid');
+
+        // 读取当前壁纸，导入文件未携带壁纸时不覆盖
+        const current = await browser.storage.local.get('settings');
+        const currentBg = (current.settings || {}).backgroundImage || '';
+        const importedSettings = Object.assign({}, GG.DEFAULTS, imported.settings || {});
+        if (!importedSettings.backgroundImage) importedSettings.backgroundImage = currentBg;
+
+        const toSave = {
+          settings: importedSettings,
+          apps: imported.apps || [],
+          categories: imported.categories || [],
+          orderByCat: imported.orderByCat || {},
+          activeCat: imported.activeCat || null
+        };
+        await browser.storage.local.set(toSave);
+
+        settings = importedSettings;
+        load();
+        // 通知主页面刷新卡片配置（若同时打开）
+        browser.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
+        GG.toast.show('已导入配置', 'success');
+      } catch (err) {
+        GG.toast.show('导入失败：文件无效', 'error');
+      }
+    });
+
+    // 清除配置：恢复默认并删除本地存储
+    $('#btnClear').addEventListener('click', async () => {
+      if (!window.confirm('确定清除所有配置？将恢复默认设置且无法撤销（含卡片与壁纸）。')) return;
+      await browser.storage.local.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat']);
+      settings = Object.assign({}, GG.DEFAULTS);
+      load();
+      browser.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
+      GG.toast.show('已清除配置', 'success');
+    });
   }
 
   async function init() {
