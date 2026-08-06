@@ -1191,6 +1191,7 @@
       const app = state.apps.find((a) => a.folderId === id);
       if (!app) return;
       app.title = changeInfo.title;
+      persist();
       const card = document.querySelector(`.card[data-folder-id="${CSS.escape(id)}"]`);
       if (card) {
         const t = card.querySelector('.card-title');
