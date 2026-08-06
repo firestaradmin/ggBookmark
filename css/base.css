@@ -21,11 +21,30 @@
   --bg-image: '';
   --bg-style: default;
   --accent-color: #4f7cff;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 
 .hidden { display: none !important; }
+
+/* 明亮模式：覆盖关键配色变量 */
+html[data-theme="light"] {
+  --bg-default: radial-gradient(1200px 800px at 20% 10%, #dbe6ff 0%, transparent 55%),
+                radial-gradient(1000px 700px at 85% 20%, #f0d9ff 0%, transparent 55%),
+                radial-gradient(900px 900px at 50% 100%, #d4f5ee 0%, transparent 60%),
+                linear-gradient(160deg, #eef2fb 0%, #e3e9f5 100%);
+  --bg-base: #e9eef7;
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(0, 0, 0, 0.12);
+  --glass-border-soft: rgba(0, 0, 0, 0.08);
+  --text: #1b2436;
+  --text-dim: #5b6b8c;
+  --text-faint: #8a97b3;
+  --shadow: 0 10px 30px rgba(20, 30, 60, 0.15);
+  color-scheme: light;
+}
 
 /* 字体大小设置：作用于主界面主要文本 */
 html[data-font-size="small"] { font-size: 13px; }
@@ -76,6 +95,21 @@ header,
   filter: blur(var(--bg-blur, 0px)) saturate(120%);
   transform: scale(1.06);
 }
+html[data-theme="light"] .gg-bg[data-style="gradient"] {
+  background-image: linear-gradient(135deg, #c7d4ee 0%, #d9d2f0 50%, #cfe9e6 100%);
+}
+html[data-theme="light"] .gg-bg[data-style="image"]::after,
+html[data-theme="light"] .gg-bg[data-style="gradient"]::after {
+  background-color: rgba(255, 255, 255, var(--bg-dim, 0.35));
+}
+/* 明亮模式下，原硬编码的白色文字/边框改为深色，保证可读性 */
+html[data-theme="light"] .seg-btn.active { color: #1b2436; }
+html[data-theme="light"] .menu-item.selected { color: #1b2436; }
+html[data-theme="light"] .icon-btn.active { color: #1b2436; }
+html[data-theme="light"] .color-dot.active { border-color: var(--text); }
+html[data-theme="light"] .shell { background: rgba(255, 255, 255, 0.35); }
+html[data-theme="light"] .pp-settings .s-head,
+html[data-theme="light"] .nt-settings .s-head { border-bottom-color: var(--glass-border-soft); }
 /* To prevent transparent edges from the blur filter, enlarge the image a bit
    (scaling the fixed element itself can break its stacking/painting). */
 .gg-bg[data-style="image"],

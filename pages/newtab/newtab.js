@@ -68,6 +68,10 @@
     document.documentElement.style.setProperty('--accent', s.accentColor);
     document.documentElement.style.setProperty('--accent-2', s.accentColor);
     document.documentElement.dataset.fontSize = s.fontSize || 'medium';
+    document.documentElement.dataset.theme = s.theme || 'dark';
+    document.querySelectorAll('.theme-btn').forEach((b) => {
+      b.classList.toggle('active', (b.dataset.theme === (s.theme || 'dark')));
+    });
   }
 
   // ---------- Search ----------
@@ -1192,6 +1196,16 @@
   // ---------- Buttons ----------
   function wireButtons() {
     $('#btnUndo').innerHTML = GG.icon('undo');
+    // 主题模式切换
+    document.querySelectorAll('.theme-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.theme-btn').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        state.settings.theme = b.dataset.theme;
+        GG.saveSettings(state.settings);
+        document.documentElement.dataset.theme = state.settings.theme;
+      });
+    });
     wireViewMenu();
     syncViewBtn();
     $('#btnSettings').innerHTML = GG.icon('settings');

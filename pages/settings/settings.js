@@ -345,6 +345,10 @@
     document.documentElement.style.setProperty('--accent', settings.accentColor);
     document.documentElement.style.setProperty('--accent-2', settings.accentColor);
     document.documentElement.dataset.fontSize = settings.fontSize || 'medium';
+    document.documentElement.dataset.theme = settings.theme || 'dark';
+    document.querySelectorAll('.theme-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.theme === (settings.theme || 'dark'));
+    });
     applyBgPreview();
     applyCardWidthPreview();
     updatePreview();
@@ -374,6 +378,29 @@
 
   function wire() {
     document.querySelectorAll('.seg-btn').forEach((b) => {
+    $('#bgUrl').addEventListener('input', applyBgPreview);
+    $('#bgUrl').addEventListener('input', updatePreview);
+    $('#bgUrl').addEventListener('input', markActivePreset);
+    $('#bgBlur').addEventListener('input', applyBgPreview);
+    $('#bgDim').addEventListener('input', applyBgPreview);
+
+    // 本地图片上传 -> 转为 data URL 插入输入框（自动选“自定义图片”）
+    $('#bgFile').addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const dataURL = await fileToDataURL(file);
+      $('#bgUrl').value = dataURL;
+      document.querySelector('[data-bg="image"]').classList.add('active');
+    document.querySelectorAll('.theme-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.theme-btn').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        settings.theme = b.dataset.theme;
+        document.documentElement.dataset.theme = settings.theme;
+      });
+    });
+    document.querySelectorAll('.seg-btn').forEach((b) => {
       b.addEventListener('click', () => {
         document.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
         b.classList.add('active');
@@ -389,21 +416,6 @@
         applyBgPreview();
       });
     });
-    $('#bgUrl').addEventListener('input', applyBgPreview);
-    $('#bgUrl').addEventListener('input', updatePreview);
-    $('#bgUrl').addEventListener('input', markActivePreset);
-    $('#bgBlur').addEventListener('input', applyBgPreview);
-    $('#bgDim').addEventListener('input', applyBgPreview);
-
-    // 本地图片上传 -> 转为 data URL 插入输入框（自动选“自定义图片”）
-    $('#bgFile').addEventListener('change', async (e) => {
-      const file = e.target.files && e.target.files[0];
-      e.target.value = '';
-      if (!file) return;
-      const dataURL = await fileToDataURL(file);
-      $('#bgUrl').value = dataURL;
-      document.querySelector('[data-bg="image"]').classList.add('active');
-      document.querySelectorAll('.seg-btn').forEach((b) => {
         b.classList.toggle('active', b.dataset.bg === 'image');
       });
       applyBgPreview();
@@ -451,6 +463,8 @@
       settings.showDescriptions = $('#showDesc').checked;
       settings.fontSize = $('#fontSize').value;
       settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
+      const activeTheme = document.querySelector('.theme-btn.active');
+      if (activeTheme) settings.theme = activeTheme.dataset.theme;
       const activeDot = document.querySelector('.color-dot.active');
       if (activeDot) settings.accentColor = activeDot.dataset.color;
       await GG.saveSettings(settings);
