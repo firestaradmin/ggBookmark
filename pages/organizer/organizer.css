@@ -23,6 +23,8 @@
   font-size: 12px;
 }
 .btn-group { display: flex; gap: 6px; }
+.icon-btn { padding: 8px; justify-content: center; }
+.icon-btn svg { width: 18px; height: 18px; display: block; }
 
 .layout {
   display: grid;

@@ -82,6 +82,11 @@
     tree.forEach((node) => { if (node.type === 'folder') root.appendChild(buildTreeNode(node, 0)); });
   }
 
+  function collapseAll() {
+    walkFolders(tree, (f) => collapse.add(f.id));
+    renderFolderTree();
+  }
+
   function buildTreeNode(node, depth) {
     const wrap = document.createElement('div');
     wrap.className = 'tree-node';
@@ -685,12 +690,14 @@
   function wireButtons() {
     $('#btnDelete').innerHTML = GG.icon('trash');
     $('#btnUndo').innerHTML = GG.icon('undo');
-    $('#btnHome').innerHTML = GG.icon('grid');
+    $('#btnHome').innerHTML = GG.icon('return');
     $('#btnUndo').addEventListener('click', undo);
     $('#btnDelete').addEventListener('click', deleteSelected);
     $('#btnHome').addEventListener('click', () => browser.tabs.update({ url: './../newtab/newtab.html' }));
     $('#btnNewFolder').innerHTML = GG.icon('folderPlus');
     $('#btnNewFolder').addEventListener('click', () => newFolder(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
+    $('#btnCollapseAll').innerHTML = GG.icon('foldUp');
+    $('#btnCollapseAll').addEventListener('click', collapseAll);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Delete' && activePanel() && activePanel().selection.size) { e.preventDefault(); deleteSelected(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
