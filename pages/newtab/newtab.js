@@ -1145,7 +1145,15 @@
     wireViewMenu();
     syncViewBtn();
     $('#btnSettings').innerHTML = GG.icon('settings');
-    $('#btnSettings').addEventListener('click', () => browser.runtime.openOptionsPage());
+    $('#btnSettings').addEventListener('click', () => {
+      const panel = document.getElementById('ntSettings');
+      if (panel) panel.classList.toggle('open');
+    });
+    const ntSettingsClose = document.getElementById('ntSettingsClose');
+    if (ntSettingsClose) ntSettingsClose.addEventListener('click', () => {
+      const panel = document.getElementById('ntSettings');
+      if (panel) panel.classList.remove('open');
+    });
     const btnOrg = $('#btnOrganize');
     btnOrg.innerHTML = GG.icon('bookmark');
     btnOrg.addEventListener('click', () => browser.tabs.create({ url: browser.runtime.getURL('pages/organizer/organizer.html') }));
