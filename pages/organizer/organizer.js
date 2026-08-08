@@ -311,16 +311,7 @@
       item.querySelector('.item-type').textContent = '书签';
       item.querySelector('.item-title').textContent = node.title || hostOf(node.url);
       item.querySelector('.item-url').textContent = hostOf(node.url);
-      const icon = item.querySelector('.item-icon');
-      const fsrc = GG.iconFor(node.url, (orgSettings && orgSettings.faviconSource) || GG.DEFAULTS.faviconSource).src;
-      if (fsrc) {
-        const img = document.createElement('img');
-        img.onerror = function () { const s = document.createElement('span'); s.className = 'letter'; s.textContent = (node.title || '?').charAt(0); icon.innerHTML = ''; icon.appendChild(s); };
-        img.src = fsrc;
-        icon.appendChild(img);
-      } else {
-        const s = document.createElement('span'); s.className = 'letter'; s.textContent = (node.title || '?').charAt(0); icon.appendChild(s);
-      }
+      GG.renderFavicon(item.querySelector('.item-icon'), node.url, node.title, (orgSettings && orgSettings.faviconSource) || GG.DEFAULTS.faviconSource);
     }
     if (p.selection.has(node.id)) item.classList.add('selected');
 

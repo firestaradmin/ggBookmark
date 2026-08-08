@@ -59,3 +59,111 @@ GG.icons = {
 GG.icon = function (name) {
   return GG.icons[name] || '';
 };
+
+/* ---- favicon 本地缓存 ----
+ * favicon 图片获取成功后按「来源 + 网站 url」缓存到 chrome.storage.local，
+ * 同时在内存里保留一份（同页面零延迟命中）。下次渲染直接读缓存，不再请求网络。
+ * 缓存键：favicon:<source>:<url>，值为图片的 data URL。
+ */
+const FAV_CACHE_PREFIX = 'favicon:';
+const favMemCache = new Map();          // key -> dataURL  （内存一级缓存）
+const favStorage = GG.api && GG.api.storage; // chrome.storage.local
+
+function favKey(source, url) {
+  return FAV_CACHE_PREFIX + (source || '') + ':' + (url || '');
+}
+
+// 从持久化缓存加载单个键到内存
+async function favLoadFromStorage(key) {
+  if (!favStorage) return null;
+  try {
+    const data = await favStorage.get(key);
+    const val = data && data[key];
+    if (val) favMemCache.set(key, val);
+    return val || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 把获取到的图片数据写入两级缓存（若仍处于该来源/该 key 有效）
+function favStore(key, dataURL) {
+  favMemCache.set(key, dataURL);
+  if (favStorage) {
+    favStorage.set({ [key]: dataURL }).catch(() => {});
+  }
+}
+
+// 下载图片并转成 data URL（需要扩展的 <all_urls> 跨域权限）
+async function favToDataURL(src) {
+  try {
+    const res = await fetch(src, { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const type = blob.type || 'image/png';
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+// 渲染到图标节点：同步优先读内存缓存；未命中则显示首字母占位并异步获取/缓存。
+GG.renderFavicon = function (container, url, title, source) {
+  container.innerHTML = '';
+  const letter = (title || '?').charAt(0);
+  const showLetter = () => {
+    const s = document.createElement('span');
+    s.className = 'letter';
+    s.textContent = letter;
+    container.appendChild(s);
+  };
+  const showImg = (dataURL) => {
+    container.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = dataURL;
+    container.appendChild(img);
+  };
+  const src = GG.faviconUrl ? GG.faviconUrl(url, source) : '';
+  if (!src) {
+    showLetter();
+    return;
+  }
+  const key = favKey(source, url);
+
+  // 1) 内存缓存命中 -> 立即显示
+  if (favMemCache.has(key)) {
+    showImg(favMemCache.get(key));
+    return;
+  }
+
+  // 2) 未命中：显示首字母占位，异步尝试（持久化缓存 -> 网络 -> 写缓存）
+  showLetter();
+  (async () => {
+    const cached = await favLoadFromStorage(key);
+    if (cached) { showImg(cached); return; }
+    // 请求网络
+    const img = new Image();
+    const timer = setTimeout(() => { img.remove(); }, GG.FAVICON_TIMEOUT);
+    img.onload = () => {
+      clearTimeout(timer);
+      // 用原 src 转 data URL 并缓存
+      favToDataURL(src).then((dataURL) => {
+        if (dataURL) {
+          favStore(key, dataURL);
+          // 仅当容器里仍是占位字母时替换为图标
+          if (container.querySelector('.letter')) showImg(dataURL);
+        }
+      });
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      // 失败：显示首字母（已在占位），不缓存
+    };
+    img.src = src;
+  })();
+};

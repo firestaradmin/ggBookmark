@@ -271,16 +271,8 @@
       const tile = tpl.content.cloneNode(true).querySelector('.tile');
       const icon = tile.querySelector('.tile-icon');
       icon.dataset.title = bm.title || bm.url;
-      // icon: use favicon (按设置来源；local 直接显示首字母)
-      const src = GG.iconFor(bm.url, (state.settings && state.settings.faviconSource) || GG.DEFAULTS.faviconSource).src;
-      if (src) {
-        const img = document.createElement('img');
-        img.onerror = function () { img.remove(); const s = document.createElement('span'); s.className = 'letter'; s.textContent = (bm.title || '?').charAt(0); icon.appendChild(s); };
-        img.src = src;
-        icon.appendChild(img);
-      } else {
-        const s = document.createElement('span'); s.className = 'letter'; s.textContent = (bm.title || '?').charAt(0); icon.appendChild(s);
-      }
+      // icon: 依次尝试多个在线来源，全部失败则显示首字母
+      GG.renderFavicon(icon, bm.url, bm.title, (state.settings && state.settings.faviconSource) || GG.DEFAULTS.faviconSource);
       tile.querySelector('.tile-title').textContent = bm.title || (function () { try { return new URL(bm.url).host; } catch (e) { return bm.url; } })();
       tile.querySelector('.tile-desc').textContent = hostOf(bm.url);
       tile.dataset.url = bm.url;
