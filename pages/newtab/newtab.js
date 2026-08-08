@@ -1119,7 +1119,7 @@
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
     add('包含子文件夹', 'selectSon', () => { app.recursive = !app.recursive; persist(); renderCards(); });
-    add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
+    add('重命名', 'rename', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
     more.innerHTML = GG.icon('settings');
     more.addEventListener('click', (e) => { e.stopPropagation(); openMenu(menu, more); });
@@ -1585,6 +1585,12 @@
   function confirmPick() {
     if (!selectedFolderId || !currentPick) { GG.toast.show('请选择一个文件夹', 'error'); return; }
     const { card, app, mode } = currentPick;
+    // 检查该文件夹是否已被其它卡片使用（排除当前编辑的卡片本身）
+    const dup = state.apps.find((a) => a.folderId === selectedFolderId && a !== app);
+    if (dup) {
+      GG.toast.show('该文件夹已有对应的卡片「' + (dup.title || '') + '」，请更换文件夹', 'error');
+      return;
+    }
     if (mode === 'card' && app) {
       // re-folder existing app
       GG.api.bookmarks.get(selectedFolderId).then((arr) => {
