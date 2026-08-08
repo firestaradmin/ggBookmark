@@ -1174,19 +1174,52 @@
 
   // ---------- Tile drag (reorder within a card / move between cards) ----------
   let dragTile = null;   // the tile element being dragged
+  let dragStartY = 0;    // 拖拽开始时的鼠标 Y，用于判断拖拽方向
+
+  // 用「间隔中点」计算鼠标 my 应插入的位置，返回 { over, dropPos }
+  // dropPos: 'before' 插到 over 前，'after' 插到 over 后。
+  // tiles 需为已排除拖拽项的 DOM tile 数组（按 DOM 顺序）。
+  // movingDown: 本次拖拽是否向下移动，用于修正“往下拖少一格”的偏差。
+  function computeDropTarget(tiles, my, movingDown) {
+    if (!tiles.length) return null;
+    const rs = tiles.map((t) => t.getBoundingClientRect());
+    // 最上方：插到第一个之前
+    if (my < rs[0].top) return { over: tiles[0], dropPos: 'before' };
+    // 最下方：插到最后一个之后
+    if (my >= rs[rs.length - 1].bottom) return { over: tiles[tiles.length - 1], dropPos: 'after' };
+    // 找鼠标所在的 tile 区域
+    for (let i = 0; i < tiles.length - 1; i++) {
+      const gapMid = (rs[i].bottom + rs[i + 1].top) / 2;
+      if (my < gapMid) {
+        // 往下拖：默认插到目标后（避免少一格）；只有鼠标在目标顶部极小区域才插到前。
+        // 往上拖：鼠标在目标上半插到前，下半插到后。
+        let before;
+        if (movingDown) {
+          before = (my - rs[i].top) < rs[i].height * 0.2;
+        } else {
+          before = my < rs[i].top + rs[i].height / 2;
+        }
+        return { over: tiles[i], dropPos: before ? 'before' : 'after' };
+      }
+    }
+    // 兜底：最后一个之后
+    return { over: tiles[tiles.length - 1], dropPos: 'after' };
+  }
 
   function enableGridDrag() {
     grid.addEventListener('dragstart', (e) => {
       const tile = e.target.closest('.tile');
-      if (tile && !e.target.closest('.tile-more')) { e.preventDefault(); return; }
-      if (tile) {
-        e.dataTransfer.setData('bookmark-id', tile.dataset.bookmarkId);
-        e.dataTransfer.setData('from-folder', tile.closest('.card').dataset.folderId);
-        e.dataTransfer.setData('text/plain', tile.dataset.url || '');
-        e.dataTransfer.effectAllowed = 'copyMove';
-        tile.classList.add('tile-dragging');
-        dragTile = tile;
-      }
+      // 非 tile 的拖拽（如卡片拖拽）不在这里处理，也不阻止
+      if (!tile) return;
+      // tile 本体不允许拖拽，只允许通过右侧手柄（.tile-more）拖动排序
+      if (!e.target.closest('.tile-more')) { e.preventDefault(); return; }
+      e.dataTransfer.setData('bookmark-id', tile.dataset.bookmarkId);
+      e.dataTransfer.setData('from-folder', tile.closest('.card').dataset.folderId);
+      e.dataTransfer.setData('text/plain', tile.dataset.url || '');
+      e.dataTransfer.effectAllowed = 'copyMove';
+      tile.classList.add('tile-dragging');
+      dragTile = tile;
+      dragStartY = e.clientY;
     });
     grid.addEventListener('dragend', (e) => {
       if (e.target.closest && e.target.closest('.tile')) e.target.closest('.tile').classList.remove('tile-dragging');
@@ -1202,12 +1235,13 @@
       e.dataTransfer.dropEffect = 'move';
       card.classList.add('drop-target');
       document.querySelectorAll('.tile.tile-drop').forEach((t) => t.classList.remove('tile-drop'));
-      const over = e.target.closest('.tile');
-      if (over && over !== dragTile) {
-        const r = over.getBoundingClientRect();
-        const before = (e.clientY - r.top) < r.height / 2;
-        over.classList.add('tile-drop');
-        over.dataset.dropPos = before ? 'before' : 'after';
+      // 高亮：鼠标落在哪个 gap 就高亮到对应位置
+      const tiles = Array.from(card.querySelectorAll('.tile')).filter((t) => t !== dragTile);
+      const hit = computeDropTarget(tiles, e.clientY, e.clientY > dragStartY);
+      if (hit) {
+        hit.over.classList.add('tile-drop');
+        hit.over.dataset.dropPos = hit.dropPos;
+        console.log('[gg-drag] highlight', { target: hit.over.dataset.bookmarkId, dropPos: hit.dropPos, my: e.clientY });
       }
     });
     grid.addEventListener('dragleave', (e) => {
@@ -1226,14 +1260,17 @@
       const srcCard = dragTile && dragTile.closest('.card');
       // reorder within the same card
       if (srcCard === card) {
-        const over = e.target.closest('.tile');
-        const tiles = Array.from(card.querySelectorAll('.tile'));
-        let targetIndex = tiles.length;
-        if (over && over !== dragTile) {
-          const idx = tiles.indexOf(over);
-          targetIndex = over.dataset.dropPos === 'before' ? idx : idx + 1;
+        // 与 dragover 高亮使用完全一致的 computeDropTarget，保证所见即所得
+        const tiles = Array.from(card.querySelectorAll('.tile')).filter((t) => t !== dragTile);
+        const hit = computeDropTarget(tiles, e.clientY, e.clientY > dragStartY);
+        let targetBmId = null;
+        let insertBefore = false;
+        if (hit) {
+          targetBmId = hit.over.dataset.bookmarkId;
+          insertBefore = hit.dropPos === 'before';
         }
-        reorderBookmarkInCard(bmId, card.dataset.folderId, targetIndex);
+        console.log('[gg-drag] drop', { bmId, folder: card.dataset.folderId, targetBmId, insertBefore, clientY: e.clientY });
+        reorderBookmarkInCard(bmId, card.dataset.folderId, targetBmId, insertBefore);
         return;
       }
       // otherwise move the bookmark into the other card's folder
@@ -1241,18 +1278,37 @@
     });
   }
 
-  // Reorder a bookmark within its folder by moving it to `targetIndex`.
-  async function reorderBookmarkInCard(bmId, folderId, targetIndex) {
+  // Reorder a bookmark within its folder.
+  // 直接构造目标完整顺序 clean（含文件夹项），再逆序 move 到各自目标 index，
+  // 规避单次 move 的 index 语义歧义。
+  async function reorderBookmarkInCard(bmId, folderId, targetBmId, insertBefore) {
     const children = await GG.api.bookmarks.getChildren(folderId).catch(() => null);
     if (!children) return;
-    const ids = children.filter((c) => c.type === 'bookmark').map((c) => c.id);
-    const cur = ids.indexOf(bmId);
-    if (cur === -1) return;
-    if (cur < targetIndex) targetIndex--;
-    if (cur === targetIndex) { renderCards(); return; }
-    GG.api.bookmarks.move(bmId, { parentId: folderId, index: targetIndex }).then(() => {
-      renderCards();
-    }, () => GG.toast.show('排序失败', 'error'));
+    const order = children.map((c) => c.id);           // 当前完整顺序（含文件夹项）
+    if (!order.includes(bmId)) return;
+    // 移除自身
+    const arr = order.filter((id) => id !== bmId);
+    // 计算 bmId 的目标插入位置
+    let targetIndex;
+    if (targetBmId) {
+      let t = arr.indexOf(targetBmId);
+      if (t === -1) t = arr.length;
+      targetIndex = insertBefore ? t : t + 1;
+    } else {
+      targetIndex = arr.length; // 拖到末尾
+    }
+    arr.splice(targetIndex, 0, bmId);
+    const clean = arr;                                 // 目标完整顺序
+    console.log('[gg-drag] reorder', { bmId, folderId, targetBmId, insertBefore, order, clean });
+    // 逆序 move：从最后一个到第一个，固定各自目标 index，保证最终顺序为 clean
+    let changed = false;
+    for (let i = clean.length - 1; i >= 0; i--) {
+      if (clean[i] !== order[i]) {
+        changed = true;
+        await GG.api.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {});
+      }
+    }
+    if (changed) renderCards();
   }
 
   async function moveBookmark(bmId, targetFolderId, bmUrl, card) {

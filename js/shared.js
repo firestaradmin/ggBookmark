@@ -138,6 +138,9 @@ GG.icon = function (name) {
   document.addEventListener('scroll', hide, true);
   // 点击时隐藏（点击按钮会改变按钮状态/位置，可能破坏 mouseout 判定，导致旧气泡残留）
   document.addEventListener('click', hide, true);
+  // 拖拽开始时隐藏（拖拽手柄带有 data-tip，拖拽时 tooltip 可能残留）
+  document.addEventListener('dragstart', hide, true);
+  document.addEventListener('dragend', hide, true);
 })();
 
 /* ---- favicon 本地缓存 ----
