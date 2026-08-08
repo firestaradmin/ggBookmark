@@ -26,7 +26,7 @@
     return value && value.startsWith(PRESET_PREFIX) ? value.slice(PRESET_PREFIX.length) : null;
   }
   function presetURL(name) {
-    return browser.runtime.getURL('pics/wallpapers/' + name);
+    return GG.api.runtime.getURL('pics/wallpapers/' + name);
   }
   // 存储/导出时使用预设文件名标识，而非完整 URL
   function presetRef(name) {
@@ -141,7 +141,7 @@
   }
   // 快照整个浏览器的书签树（menu/toolbar/unfiled 三个容器及其全部子孙），用于完整备份与还原。
   async function snapshotBookmarks() {
-    const roots = await browser.bookmarks.getTree();
+    const roots = await GG.api.bookmarks.getTree();
     const containers = (roots[0] && roots[0].children) || [];
     const subs = [];
     for (const c of containers) {
@@ -154,7 +154,7 @@
   async function hasExistingBookmarks() {
     for (const r of ['menu________', 'toolbar_____', 'unfiled_____']) {
       try {
-        const kids = await browser.bookmarks.getChildren(r);
+        const kids = await GG.api.bookmarks.getChildren(r);
         if (kids && kids.length) return true;
       } catch (e) { /* ignore */ }
     }
@@ -176,7 +176,7 @@
     const childrenCache = new Map();
     async function getChildren(parentId) {
       if (!childrenCache.has(parentId)) {
-        childrenCache.set(parentId, await browser.bookmarks.getChildren(parentId));
+        childrenCache.set(parentId, await GG.api.bookmarks.getChildren(parentId));
       }
       return childrenCache.get(parentId);
     }
@@ -194,13 +194,13 @@
       for (const n of nodes) {
         if (n.type === 'folder') {
           let f = await findExisting(parentId, n);
-          if (!f) f = await browser.bookmarks.create({ title: n.title, parentId, type: 'folder' });
+          if (!f) f = await GG.api.bookmarks.create({ title: n.title, parentId, type: 'folder' });
           const p = parentPath.concat(n.title);
           newPathToId.set(p.join(PATH_SEP), f.id);
           if (n.children) await recreate(n.children, f.id, p);
         } else if (n.type === 'bookmark' && n.url) {
           if (!(await findExisting(parentId, n))) {
-            await browser.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
+            await GG.api.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
           }
         }
       }
@@ -217,7 +217,7 @@
 
   // 展示书签文件夹选择对话框，返回用户选定的文件夹 id（取消则返回 null）
   async function pickBookmarkFolder() {
-    const tree = await browser.bookmarks.getTree();
+    const tree = await GG.api.bookmarks.getTree();
     const roots = (tree[0] && tree[0].children) || [];
     const options = [];
     (function walk(nodes, depth) {
@@ -282,7 +282,7 @@
     placeholder.textContent = '（每次导入时手动选择）';
     sel.appendChild(placeholder);
 
-    const tree = await browser.bookmarks.getTree();
+    const tree = await GG.api.bookmarks.getTree();
     const roots = (tree[0] && tree[0].children) || [];
     (function walk(nodes, depth) {
       for (const n of nodes) {
@@ -409,10 +409,12 @@
   }
 
   function wire() {
-    document.querySelectorAll('.seg-btn').forEach((b) => {
-    $('#bgUrl').addEventListener('input', applyBgPreview);
-    $('#bgUrl').addEventListener('input', updatePreview);
-    $('#bgUrl').addEventListener('input', markActivePreset);
+    // 背景相关输入框实时预览
+    $('#bgUrl').addEventListener('input', () => {
+      applyBgPreview();
+      updatePreview();
+      markActivePreset();
+    });
     $('#bgBlur').addEventListener('input', applyBgPreview);
     $('#bgDim').addEventListener('input', applyBgPreview);
 
@@ -424,6 +426,14 @@
       const dataURL = await fileToDataURL(file);
       $('#bgUrl').value = dataURL;
       document.querySelector('[data-bg="image"]').classList.add('active');
+      document.querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('active', x.dataset.bg === 'image'));
+      toggleBgFields();
+      applyBgPreview();
+      updatePreview();
+      markActivePreset();
+    });
+
+    // 主题模式切换
     document.querySelectorAll('.theme-btn').forEach((b) => {
       b.addEventListener('click', () => {
         document.querySelectorAll('.theme-btn').forEach((x) => x.classList.remove('active'));
@@ -432,6 +442,8 @@
         document.documentElement.dataset.theme = settings.theme;
       });
     });
+
+    // 背景风格切换
     document.querySelectorAll('.seg-btn').forEach((b) => {
       b.addEventListener('click', () => {
         document.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
@@ -446,14 +458,11 @@
         }
         toggleBgFields();
         applyBgPreview();
+        updatePreview();
+        markActivePreset();
       });
     });
-        b.classList.toggle('active', b.dataset.bg === 'image');
-      });
-      applyBgPreview();
-      updatePreview();
-      markActivePreset();
-    });
+
     if ($('#bgClear')) {
       $('#bgClear').addEventListener('click', () => {
         $('#bgUrl').value = '';
@@ -524,7 +533,7 @@
 
     // 导出配置为 JSON 文件（不含壁纸图片数据，但包含主页面卡片配置与全部书签）
     $('#btnExport').addEventListener('click', async () => {
-      const stored = await browser.storage.local.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
+      const stored = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
       const cfg = {
         version: GG.VERSION,
         settings: Object.assign({}, stored.settings || {})
@@ -572,7 +581,7 @@
         if (!imported || typeof imported !== 'object') throw new Error('invalid');
 
         // 读取当前壁纸，导入文件未携带壁纸时不覆盖
-        const current = await browser.storage.local.get('settings');
+        const current = await GG.api.storage.get('settings');
         const currentBg = (current.settings || {}).backgroundImage || '';
         // 保留已保存的“书签导入文件夹”，不被导入的配置覆盖（导入文件通常不含该字段）
         const savedImportFolder = (current.settings || {}).bookmarkImportFolder || '';
@@ -597,7 +606,7 @@
             try {
               // 优先使用配置文件里记录的导入文件夹；其次用本地保存的设置；都没有才询问用户
               const importFolder = importedSettings.bookmarkImportFolder
-                || (await browser.storage.local.get('settings')).settings?.bookmarkImportFolder
+                || (await GG.api.storage.get('settings')).settings?.bookmarkImportFolder
                 || '';
               const target = importFolder
                 ? importFolder
@@ -622,12 +631,12 @@
           orderByCat: imported.orderByCat || {},
           activeCat: imported.activeCat || null
         };
-        await browser.storage.local.set(toSave);
+        await GG.api.storage.set(toSave);
 
         settings = importedSettings;
         load();
         // 通知主页面刷新卡片配置（若同时打开）
-        browser.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
+        GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
         GG.toast.show('已导入配置', 'success');
       } catch (err) {
         GG.toast.show('导入失败：文件无效', 'error');
@@ -656,7 +665,7 @@
       $('#btnSyncDownload').addEventListener('click', async () => {
         try {
           await GG.Sync.download();
-          browser.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
+          GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
           GG.toast.show('已从服务器下载并应用', 'success');
         } catch (e) {
           GG.toast.show('下载失败：' + (e && e.message ? e.message : '未知错误'), 'error');
@@ -682,16 +691,16 @@
     // 清除配置：恢复默认并删除本地存储（仅本扩展配置，不删除 Firefox 书签）
     $('#btnClear').addEventListener('click', async () => {
       if (!window.confirm('确定清除所有配置？将恢复默认设置且无法撤销（含卡片与壁纸）。\n注意：此操作仅清除本扩展配置，不会删除 Firefox 中的书签。')) return;
-      await browser.storage.local.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat']);
+      await GG.api.storage.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat']);
       settings = Object.assign({}, GG.DEFAULTS);
       load();
-      browser.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
+      GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
       GG.toast.show('已清除配置', 'success');
     });
   }
 
   async function init() {
-    const data = await browser.storage.local.get('settings');
+    const data = await GG.api.storage.get('settings');
     settings = Object.assign({}, GG.DEFAULTS, data.settings || {});
     load();
     wire();

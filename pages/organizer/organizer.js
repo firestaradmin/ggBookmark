@@ -35,7 +35,7 @@
   }
 
   async function loadTree() {
-    const roots = await browser.bookmarks.getTree();
+    const roots = await GG.api.bookmarks.getTree();
     tree = roots[0].children || [];
     rebuildFolderCount();
     // collapse folders at depth >= 2 (keep only the first two levels expanded)
@@ -62,7 +62,7 @@
   }
 
   async function refresh() {
-    const roots = await browser.bookmarks.getTree();
+    const roots = await GG.api.bookmarks.getTree();
     tree = roots[0].children || [];
     rebuildFolderCount();
     renderFolderTree();
@@ -287,8 +287,8 @@
 
   async function getChildren(folderId) {
     try {
-      if (folderId === DEFAULT_ROOT) { const roots = await browser.bookmarks.getTree(); return roots[0].children || []; }
-      return await browser.bookmarks.getChildren(folderId);
+      if (folderId === DEFAULT_ROOT) { const roots = await GG.api.bookmarks.getTree(); return roots[0].children || []; }
+      return await GG.api.bookmarks.getChildren(folderId);
     } catch (e) { return []; }
   }
 
@@ -343,7 +343,7 @@
       updateToolbar();
     });
     item.addEventListener('dblclick', () => {
-      if (node.type === 'bookmark') browser.tabs.create({ url: node.url });
+      if (node.type === 'bookmark') GG.api.tabs.create({ url: node.url });
       else setPanelFolder(p.id, node.id);
     });
     item.addEventListener('contextmenu', (e) => {
@@ -352,7 +352,7 @@
       if (!p.selection.has(node.id)) { p.selection.clear(); p.selection.add(node.id); renderPanel(p); updateToolbar(); }
       if (node.type === 'bookmark') {
         openCtxMenu(e.clientX, e.clientY, [
-          { label: '打开链接', ic: 'external', fn: () => browser.tabs.create({ url: node.url }) },
+          { label: '打开链接', ic: 'external', fn: () => GG.api.tabs.create({ url: node.url }) },
           { label: '编辑', ic: 'settings', fn: () => promptRename(node) },
           { label: '编辑链接', ic: 'external', fn: () => editBookmarkUrl(node) },
           { label: '删除书签', ic: 'trash', fn: () => deleteItem(node), danger: true }
@@ -450,7 +450,7 @@
     const insertBefore = clientY < rect.top + rect.height / 2;
     const ids = Array.from(sel.dragIds);
     if (!ids.length) return;
-    const children = await browser.bookmarks.getChildren(folderId);
+    const children = await GG.api.bookmarks.getChildren(folderId);
     const order = children.map((c) => c.id);
     const prevOrder = order.slice();
     const rest = order.filter((id) => !ids.includes(id));
@@ -467,7 +467,7 @@
     const seen = new Set();
     const clean = finalOrder.filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
     if (JSON.stringify(clean) === JSON.stringify(prevOrder)) return;
-    for (let i = 0; i < clean.length; i++) await browser.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {});
+    for (let i = 0; i < clean.length; i++) await GG.api.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {});
     pushHistory({ type: 'reorder', folderId, prev: prevOrder, target: clean });
     GG.toast.show('已重新排序', 'success');
     renderPanel(p);
@@ -477,14 +477,14 @@
     const folderId = p.folderId;
     const ids = Array.from(sel.dragIds);
     if (!ids.length) return;
-    const children = await browser.bookmarks.getChildren(folderId);
+    const children = await GG.api.bookmarks.getChildren(folderId);
     const order = children.map((c) => c.id);
     const rest = order.filter((id) => !ids.includes(id));
     const finalOrder = rest.concat(ids);
     const seen = new Set();
     const clean = finalOrder.filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
     let changed = false;
-    for (let i = 0; i < clean.length; i++) { if (order[i] !== clean[i]) changed = true; await browser.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {}); }
+    for (let i = 0; i < clean.length; i++) { if (order[i] !== clean[i]) changed = true; await GG.api.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {}); }
     if (changed) { pushHistory({ type: 'reorder', folderId, prev: order, target: clean }); GG.toast.show('已移动到底部', 'success'); }
     renderPanel(p);
   }
@@ -492,9 +492,9 @@
   async function moveIdsTo(ids, targetFolder) {
     if (!ids.length) return;
     const prev = {};
-    for (const id of ids) { const arr = await browser.bookmarks.get(id).catch(() => []); if (arr[0]) prev[id] = arr[0].parentId; }
+    for (const id of ids) { const arr = await GG.api.bookmarks.get(id).catch(() => []); if (arr[0]) prev[id] = arr[0].parentId; }
     let moved = 0;
-    for (const id of ids) { try { await browser.bookmarks.move(id, { parentId: targetFolder }); moved++; } catch (e) {} }
+    for (const id of ids) { try { await GG.api.bookmarks.move(id, { parentId: targetFolder }); moved++; } catch (e) {} }
     if (moved) { pushHistory({ type: 'move', prev, target: targetFolder, ids }); GG.toast.show(`已移动 ${moved} 项`, 'success'); refresh(); }
   }
   function moveSelectedTo(folderId) {
@@ -511,29 +511,29 @@
     const captured = {};
     for (const id of ids) captured[id] = await captureNode(id);
     let del = 0;
-    await Promise.all(ids.map((id) => browser.bookmarks.removeTree(id).then(() => { del++; }, () => {})));
+    await Promise.all(ids.map((id) => GG.api.bookmarks.removeTree(id).then(() => { del++; }, () => {})));
     if (del) { pushHistory({ type: 'delete', captured }); GG.toast.show(`已删除 ${del} 项`, 'success'); p.selection.clear(); refresh(); }
   }
 
   async function captureNode(id) {
-    const arr = await browser.bookmarks.get(id).catch(() => []);
+    const arr = await GG.api.bookmarks.get(id).catch(() => []);
     if (!arr[0]) return null;
     const node = arr[0];
-    return { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: node.type === 'folder' ? (await browser.bookmarks.getChildren(id)) : null };
+    return { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: node.type === 'folder' ? (await GG.api.bookmarks.getChildren(id)) : null };
   }
   async function restoreNode(data) {
     if (!data) return;
     if (data.type === 'bookmark') {
-      await browser.bookmarks.create({ parentId: data.parentId, title: data.title, url: data.url }).catch(() => {});
+      await GG.api.bookmarks.create({ parentId: data.parentId, title: data.title, url: data.url }).catch(() => {});
     } else {
-      const created = await browser.bookmarks.create({ parentId: data.parentId, title: data.title }).catch(() => {});
+      const created = await GG.api.bookmarks.create({ parentId: data.parentId, title: data.title }).catch(() => {});
       if (created) {
         for (let i = 0; i < (data.children || []).length; i++) {
           const child = data.children[i];
-          if (child.type === 'bookmark') { await browser.bookmarks.create({ parentId: created.id, title: child.title, url: child.url }).catch(() => {}); }
+          if (child.type === 'bookmark') { await GG.api.bookmarks.create({ parentId: created.id, title: child.title, url: child.url }).catch(() => {}); }
           else {
-            const f = await browser.bookmarks.create({ parentId: created.id, title: child.title }).catch(() => {});
-            if (f && child.children) for (const gc of child.children) { if (gc.type === 'bookmark') await browser.bookmarks.create({ parentId: f.id, title: gc.title, url: gc.url }).catch(() => {}); }
+            const f = await GG.api.bookmarks.create({ parentId: created.id, title: child.title }).catch(() => {});
+            if (f && child.children) for (const gc of child.children) { if (gc.type === 'bookmark') await GG.api.bookmarks.create({ parentId: f.id, title: gc.title, url: gc.url }).catch(() => {}); }
           }
         }
       }
@@ -543,7 +543,7 @@
   async function newFolder(parentId) {
     const name = prompt('文件夹名称：', '新文件夹');
     if (!name || !name.trim()) return;
-    const node = await browser.bookmarks.create({ parentId, title: name.trim() });
+    const node = await GG.api.bookmarks.create({ parentId, title: name.trim() });
     collapse.delete(node.id);
     refresh();
   }
@@ -564,7 +564,7 @@
     if (!t) { renderFolderTree(); return; }
     const oldTitle = node.title;
     if (t !== oldTitle) {
-      try { await browser.bookmarks.update(node.id, { title: t }); pushHistory({ type: 'rename', id: node.id, was: oldTitle }); GG.toast.show('已重命名', 'success'); renderFolderTree(); }
+      try { await GG.api.bookmarks.update(node.id, { title: t }); pushHistory({ type: 'rename', id: node.id, was: oldTitle }); GG.toast.show('已重命名', 'success'); renderFolderTree(); }
       catch (e) { renderFolderTree(); }
     }
   }
@@ -623,7 +623,7 @@
   async function promptRename(node) {
     const name = prompt('名称：', node.title || '');
     if (!name || !name.trim() || name.trim() === node.title) return;
-    try { await browser.bookmarks.update(node.id, { title: name.trim() }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已重命名', 'success'); refresh(); }
+    try { await GG.api.bookmarks.update(node.id, { title: name.trim() }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已重命名', 'success'); refresh(); }
     catch (e) { GG.toast.show('重命名失败', 'error'); }
   }
 
@@ -632,19 +632,19 @@
     if (!url || !url.trim()) return;
     const trimmed = url.trim();
     if (trimmed === node.url) return;
-    try { await browser.bookmarks.update(node.id, { url: trimmed }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已更新链接', 'success'); refresh(); }
+    try { await GG.api.bookmarks.update(node.id, { url: trimmed }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已更新链接', 'success'); refresh(); }
     catch (e) { GG.toast.show('更新链接失败', 'error'); }
   }
 
   async function deleteItem(node) {
     if (node.type === 'folder') {
       if (!confirm(`确定删除文件夹“${node.title}”及其所有内容？`)) return;
-      await browser.bookmarks.removeTree(node.id).catch(() => {});
+      await GG.api.bookmarks.removeTree(node.id).catch(() => {});
       pushHistory({ type: 'deleteFolder', id: node.id, title: node.title, parentId: node.parentId });
       GG.toast.show('已删除文件夹', 'success');
     } else {
       if (!confirm(`确定删除书签“${node.title || node.url}”？`)) return;
-      await browser.bookmarks.remove(node.id).catch(() => {});
+      await GG.api.bookmarks.remove(node.id).catch(() => {});
       pushHistory({ type: 'delete', captured: { [node.id]: { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: null } } });
       GG.toast.show('已删除', 'success');
     }
@@ -653,7 +653,7 @@
 
   async function deleteFolder(node) {
     if (!confirm(`确定删除文件夹“${node.title}”及其所有内容？`)) return;
-    await browser.bookmarks.removeTree(node.id).catch(() => {});
+    await GG.api.bookmarks.removeTree(node.id).catch(() => {});
     pushHistory({ type: 'deleteFolder', id: node.id, title: node.title, parentId: node.parentId });
     GG.toast.show('已删除文件夹', 'success');
     refresh();
@@ -675,14 +675,14 @@
     const entry = history.pop();
     if (!entry) return;
     if (entry.type === 'delete') { for (const id of Object.keys(entry.captured)) await restoreNode(entry.captured[id]); GG.toast.show('已撤销删除', 'success'); refresh(); }
-    else if (entry.type === 'move') { for (const id of entry.prev) await browser.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {}); GG.toast.show('已撤销移动', 'success'); refresh(); }
+    else if (entry.type === 'move') { for (const id of entry.prev) await GG.api.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {}); GG.toast.show('已撤销移动', 'success'); refresh(); }
     else if (entry.type === 'reorder') { await applyOrderSilent(entry.folderId, entry.prev); GG.toast.show('已撤销排序', 'success'); refresh(); }
-    else if (entry.type === 'rename') { await browser.bookmarks.update(entry.id, { title: entry.was }).catch(() => {}); renderFolderTree(); refresh(); }
-    else if (entry.type === 'deleteFolder') { if (entry.parentId) await browser.bookmarks.create({ parentId: entry.parentId, title: entry.title }).catch(() => {}); renderFolderTree(); }
+    else if (entry.type === 'rename') { await GG.api.bookmarks.update(entry.id, { title: entry.was }).catch(() => {}); renderFolderTree(); refresh(); }
+    else if (entry.type === 'deleteFolder') { if (entry.parentId) await GG.api.bookmarks.create({ parentId: entry.parentId, title: entry.title }).catch(() => {}); renderFolderTree(); }
     updateToolbar();
   }
   async function applyOrderSilent(folderId, order) {
-    await Promise.all(order.map((id, i) => browser.bookmarks.move(id, { parentId: folderId, index: i })));
+    await Promise.all(order.map((id, i) => GG.api.bookmarks.move(id, { parentId: folderId, index: i })));
   }
 
   function updateToolbar() {
@@ -699,7 +699,7 @@
     $('#btnHome').innerHTML = GG.icon('return');
     $('#btnUndo').addEventListener('click', undo);
     $('#btnDelete').addEventListener('click', deleteSelected);
-    $('#btnHome').addEventListener('click', () => browser.tabs.update({ url: './../newtab/newtab.html' }));
+    $('#btnHome').addEventListener('click', () => GG.api.tabs.update({ url: GG.api.runtime.getURL('pages/newtab/newtab.html') }));
     $('#btnNewFolder').innerHTML = GG.icon('folderPlus');
     $('#btnNewFolder').addEventListener('click', () => newFolder(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
     $('#btnCollapseAll').innerHTML = GG.icon('foldUp');

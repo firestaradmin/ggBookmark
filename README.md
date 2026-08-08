@@ -1,6 +1,8 @@
 # GG Bookmark
 
-一个现代风格的 Firefox 书签起始页扩展：深色磨砂玻璃 UI、分类网格卡片、可自定义背景与搜索引擎，以及一个独立的书签整理器。
+一个现代风格的 **Chrome** 书签起始页扩展：深色磨砂玻璃 UI、分类网格卡片、可自定义背景与搜索引擎，以及一个独立的书签整理器。
+
+> 本扩展完全面向 Chrome（Manifest V3），仅使用 `chrome.*` 原生 API，不依赖任何 Firefox 兼容层。
 
 ## 功能
 
@@ -31,66 +33,44 @@
   - 删除、新建文件夹、重命名、移动到其它文件夹。
   - 支持撤销（Ctrl/⌘+Z / 顶部按钮）。
 
-- **设置页面**（右侧“设置”按钮，或 `about:addons` → 扩展 → 首选项）
-  - 背景：渐变 / 深色渐变 / 自定义图片。
+- **设置页面**（右侧“设置”按钮，或 `chrome://extensions` → 详情 → 扩展程序选项）
+  - 背景：渐变 / 深色渐变 / 自定义图片 / 预设壁纸。
   - 自定义图片支持 **网络图片 URL** 或 **本地上传 JPG/PNG/WebP**（本地文件会自动转为数据链接加载，避免 `file://` 跨源限制）。
-  - 自定义图片的模糊程度与遮罩透明度（模糊越小、遮罩越透明，图片越清晰；遮罩用于保证文字可读性）。
+  - 自定义图片的模糊程度与遮罩透明度。
   - 卡片列宽（每列宽度，全局统一）。
   - 默认搜索引擎。
-  - 主题色、字体大小、是否显示域名描述。
+  - 主题色、主题（黑暗/明亮）、字体大小、书签图标来源、是否显示域名描述。
 
-## 安装（临时加载）
-
-1. 打开 Firefox，访问 `about:debugging#/runtime/this-firefox`。
-2. 点击“临时载入附加组件”。
-3. 选择本项目根目录下的 `manifest.json`。
-
-> 由于 `chrome_url_overrides > newtab` 在 Firefox 中需用户授权（否则不会自动替换新标签页），安装后：
-> 打开 `about:addons` → 找到 GG Bookmark → 点击扩展的“…”菜单 → 勾选“允许在隐私窗口中使用”，并在起始页设置里允许。之后点击工具栏图标或从地址栏打开起始页即可。
->
-> 若新标签页未被替换，可点击工具栏扩展图标 → “打开起始页”。
-
-## 开发 / 检查
-
-```bash
-# 安装 web-ext（需要 Node.js ≥ 18）
-npm install -g web-ext
-
-# 自动加载并在 Firefox 中运行（改了源码会自动重载）
-web-ext run --source-dir .
-
-# 静态检查（无误级别错误）
-web-ext lint --source-dir .
-```
-
-## 在 Chrome / Edge 中加载
+## 安装（加载已解压的扩展程序）
 
 1. 打开 `chrome://extensions`（Edge 为 `edge://extensions`）。
 2. 右上角开启“开发者模式”。
 3. 点击“加载已解压的扩展程序”，选择本项目根目录。
-4. 新标签页会被替换为 GG Bookmark 起始页；点击工具栏图标可打开设置页。
-
-> 本扩展同时兼容 Firefox 与 Chrome：采用 **Manifest V3**，`background` 使用
-> service worker（`lib/background.js`，通过 `importScripts` 复用 `store.js`/`sync.js`），
-> 并用 `lib/browser-polyfill.min.js` 把 Chrome 的回调式 `chrome.*` API 统一为
-> Promise 化的 `browser.*`，页面与后台代码无需区分浏览器。
+4. 新标签页会被替换为 GG Bookmark 起始页；点击工具栏图标可打开起始页。
 
 ## 目录结构
 
 ```
-manifest.json            扩展清单（Manifest V3）
-lib/browser-polyfill.min.js  WebExtension API 兼容层（Firefox / Chrome 通用）
-lib/background.js        MV3 service worker 入口（importScripts 复用以下两个）
+manifest.json            扩展清单（Manifest V3，Chrome 原生）
+lib/browser.js           Chrome API Promise 封装 + 书签节点 type 归一化（核心兼容层）
 lib/store.js             默认设置、搜索引擎、书签工具
+lib/sync.js              WebDAV 同步引擎（可在后台 alarm 触发）
+lib/background.js        MV3 service worker 入口（importScripts 复用以上文件）
 js/shared.js             共享图标、Toast 提示
 css/base.css             全局暗色 / 毛玻璃主题
-pages/newtab/            起始页（新标签页 + 设置面板）
+pages/newtab/            起始页（新标签页 + 内嵌设置面板）
 pages/organizer/         书签整理器
 icons/                   图标与搜索引擎图标
+pics/wallpapers/         内置预设壁纸
 ```
 
+## 关于 Chrome 书签节点
+
+Chrome 的 `chrome.bookmarks` 返回的书签节点**没有 `type` 字段**（`type` 为 `undefined`），这是与 Firefox `browser.bookmarks` 的关键差异。Chrome 用是否有 `url` 字段来区分：
+
+- 有 `url` → 书签（链接）
+- 无 `url` → 文件夹
+
+`lib/browser.js` 在 `GG.api.bookmarks.*` 的所有返回结果上统一注入 `type` 字段（`'folder'` / `'bookmark'`），因此页面代码可以放心使用 `node.type === 'folder'` 判断，无需逐处处理差异。页面与后台代码统一通过 `GG.api.*` 访问 Chrome API。
+
 数据（分类、卡片配置、搜索设置）保存在浏览器本地存储；书签本身由浏览器与整理器直接管理。
-
-
-
-

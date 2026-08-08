@@ -23,7 +23,7 @@
 
   // ---------- Persistence ----------
   async function loadPersistent() {
-    const data = await browser.storage.local.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
+    const data = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
     state.settings = Object.assign({}, GG.DEFAULTS, data.settings || {});
     window.__ggSettings = state.settings;
     state.apps = data.apps || [];
@@ -38,10 +38,10 @@
   }
 
   async function persist() {
-    const data = await browser.storage.local.get('orderByCat');
+    const data = await GG.api.storage.get('orderByCat');
     const byCat = data.orderByCat || {};
     byCat[state.activeCategory] = cardOrder;
-    await browser.storage.local.set({
+    await GG.api.storage.set({
       apps: state.apps,
       categories: state.categories,
       activeCat: state.activeCategory,
@@ -53,7 +53,7 @@
   function resolveBgImage(value) {
     if (value && value.startsWith('preset:')) {
       const name = value.slice('preset:'.length);
-      return browser.runtime.getURL('pics/wallpapers/' + name);
+      return GG.api.runtime.getURL('pics/wallpapers/' + name);
     }
     return value;
   }
@@ -128,7 +128,7 @@
     const q = $('#searchInput').value.trim();
     if (!q) return;
     const se = GG.SEARCH_ENGINES[state.settings.searchEngine] || GG.SEARCH_ENGINES.bing;
-    browser.tabs.update({ url: se.url.replace('{q}', encodeURIComponent(q)) });
+    GG.api.tabs.update({ url: se.url.replace('{q}', encodeURIComponent(q)) });
   }
 
   // ---------- Categories ----------
@@ -198,7 +198,7 @@
 
   function setActiveCategory(id) {
     state.activeCategory = id;
-    browser.storage.local.get('orderByCat').then((d) => {
+    GG.api.storage.get('orderByCat').then((d) => {
       cardOrder = (d.orderByCat || {})[id] || [];
       persist().then(() => {});
       renderAll();
@@ -249,7 +249,7 @@
   async function buildTiles(card, folderId, recursive) {
     let list;
     try {
-      list = await browser.bookmarks.getChildren(folderId);
+      list = await GG.api.bookmarks.getChildren(folderId);
     } catch (e) {
       list = [];
     }
@@ -259,7 +259,7 @@
       const folders = items.filter((b) => b.type === 'folder');
       for (const f of folders) {
         try {
-          const sub = await browser.bookmarks.getChildren(f.id);
+          const sub = await GG.api.bookmarks.getChildren(f.id);
           bookmarks = bookmarks.concat((sub || []).filter((b) => b.type === 'bookmark'));
         } catch (e) {}
       }
@@ -289,7 +289,7 @@
 
       tile.addEventListener('click', (e) => {
         if (e.target.closest('.tile-more')) return;
-        browser.tabs.create({ url: bm.url });
+        GG.api.tabs.create({ url: bm.url });
       });
 
       tile.addEventListener('contextmenu', (e) => {
@@ -347,7 +347,7 @@
       b.addEventListener('click', () => { closeTileMenu(); handler(); });
       menu.appendChild(b);
     };
-    add('打开', 'external', () => browser.tabs.create({ url: bm.url }));
+    add('打开', 'external', () => GG.api.tabs.create({ url: bm.url }));
     add('复制链接', 'external', () => navigator.clipboard.writeText(bm.url).then(() => GG.toast.show('已复制链接', 'success')));
     add('移出卡片', 'backspace', () => removeTile(tile, bm, card));
     add('删除书签', 'trash', () => deleteBookmark(tile, bm, card), true);
@@ -381,7 +381,7 @@
 
   function deleteBookmark(tile, bm, card) {
     if (!confirm(`确定删除书签“${bm.title || bm.url}”？`)) return;
-    browser.bookmarks.remove(bm.id).then(() => {
+    GG.api.bookmarks.remove(bm.id).then(() => {
       tile.remove();
       pushUndo({ type: 'restoreBookmark', bookmarkId: bm.id, parentId: (card.dataset.folderId) });
       GG.toast.show('已删除', 'success');
@@ -544,7 +544,7 @@
         const newTitle = input.value.trim();
         app.title = newTitle;
         persist();
-        browser.bookmarks.update(app.folderId, { title: newTitle }).catch(() => {});
+        GG.api.bookmarks.update(app.folderId, { title: newTitle }).catch(() => {});
       }
       titleEl.textContent = app.title;
     };
@@ -716,7 +716,7 @@
     sel.appendChild(placeholder);
 
     try {
-      const tree = await browser.bookmarks.getTree();
+      const tree = await GG.api.bookmarks.getTree();
       const roots = (tree[0] && tree[0].children) || [];
       (function walk(nodes, depth) {
         for (const n of nodes) {
@@ -731,7 +731,7 @@
       })(roots, 0);
     } catch (e) { /* ignore */ }
 
-    const saved = await browser.storage.local.get('settings');
+    const saved = await GG.api.storage.get('settings');
     sel.value = (saved.settings && saved.settings.bookmarkImportFolder) || '';
 
     sel.addEventListener('change', () => {
@@ -785,7 +785,7 @@
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
     add('包含子文件夹', 'folderPlus', () => { app.recursive = !app.recursive; persist(); renderCards(); });
-    add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); browser.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
+    add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
     more.innerHTML = GG.icon('settings');
     more.addEventListener('click', (e) => { e.stopPropagation(); openMenu(menu, more); });
@@ -1009,27 +1009,27 @@
 
   // Reorder a bookmark within its folder by moving it to `targetIndex`.
   async function reorderBookmarkInCard(bmId, folderId, targetIndex) {
-    const children = await browser.bookmarks.getChildren(folderId).catch(() => null);
+    const children = await GG.api.bookmarks.getChildren(folderId).catch(() => null);
     if (!children) return;
     const ids = children.filter((c) => c.type === 'bookmark').map((c) => c.id);
     const cur = ids.indexOf(bmId);
     if (cur === -1) return;
     if (cur < targetIndex) targetIndex--;
     if (cur === targetIndex) { renderCards(); return; }
-    browser.bookmarks.move(bmId, { parentId: folderId, index: targetIndex }).then(() => {
+    GG.api.bookmarks.move(bmId, { parentId: folderId, index: targetIndex }).then(() => {
       renderCards();
     }, () => GG.toast.show('排序失败', 'error'));
   }
 
   async function moveBookmark(bmId, targetFolderId, bmUrl, card) {
-    const cur = await browser.bookmarks.get(bmId).catch(() => null);
+    const cur = await GG.api.bookmarks.get(bmId).catch(() => null);
     if (!cur || !cur[0]) return;
     const node = cur[0];
     const targetFolder = targetFolderId === 'undefined' ? null : targetFolderId;
     // if already in target, do nothing
     if (node.parentId === targetFolder) return;
     const prevParent = node.parentId;
-    browser.bookmarks.move(bmId, { parentId: targetFolder }).then(() => {
+    GG.api.bookmarks.move(bmId, { parentId: targetFolder }).then(() => {
       pushUndo({ type: 'moveBookmark', bookmarkId: bmId, toParent: targetFolder, fromParent: prevParent, url: node.url });
       GG.toast.show('书签已移动', 'success');
       renderCards();
@@ -1049,7 +1049,7 @@
   let pickerTreeEl = null;
 
   async function buildTree() {
-    const root = await browser.bookmarks.getTree();
+    const root = await GG.api.bookmarks.getTree();
     pickerTreeEl = $('#pickerTree');
     pickerTreeEl.innerHTML = '';
     selectedFolderId = currentPick.app ? currentPick.app.folderId : null;
@@ -1193,7 +1193,7 @@
     const { card, app, mode } = currentPick;
     if (mode === 'card' && app) {
       // re-folder existing app
-      browser.bookmarks.get(selectedFolderId).then((arr) => {
+      GG.api.bookmarks.get(selectedFolderId).then((arr) => {
         if (arr && arr[0]) app.title = arr[0].title;
         app.folderId = selectedFolderId;
         persist().then(renderCards);
@@ -1201,7 +1201,7 @@
     } else {
       // new card
       const pickedCol = (currentPick && typeof currentPick.col === 'number') ? currentPick.col : null;
-      browser.bookmarks.get(selectedFolderId).then((arr) => {
+      GG.api.bookmarks.get(selectedFolderId).then((arr) => {
         const folder = arr && arr[0];
         const title = folder ? folder.title : '新卡片';
         const newApp = {
@@ -1268,7 +1268,7 @@
     });
     const btnOrg = $('#btnOrganize');
     btnOrg.innerHTML = GG.icon('bookmark');
-    btnOrg.addEventListener('click', () => browser.tabs.create({ url: browser.runtime.getURL('pages/organizer/organizer.html') }));
+    btnOrg.addEventListener('click', () => GG.api.tabs.create({ url: GG.api.runtime.getURL('pages/organizer/organizer.html') }));
     const btnAdd = $('#btnAddCard');
     btnAdd.innerHTML = GG.icon('addCard');
     btnAdd.title = '卡片添加：新增一个书签卡片';
@@ -1364,7 +1364,7 @@
     renderAll();
 
     // listen for settings / data changes from settings page (import / clear)
-    browser.storage.onChanged.addListener((changes, area) => {
+    GG.api.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat'].some((k) => k in changes);
       if (changes.settings) {
@@ -1388,7 +1388,7 @@
       }
     });
     // 后台定时同步的结果通知（仅影响提示，不影响同步本身）
-    browser.runtime.onMessage.addListener((msg) => {
+    GG.api.runtime.onMessage.addListener((msg) => {
       if (!msg || msg.type !== 'gg-sync-log') return;
       if (GG.toast) {
         if (msg.ok) GG.toast.show(msg.msg || '定时同步成功', 'success');
@@ -1396,7 +1396,7 @@
       }
     });
     // folder renamed elsewhere -> sync card title
-    browser.bookmarks.onChanged.addListener((id, changeInfo) => {
+    GG.api.bookmarks.onChanged.addListener((id, changeInfo) => {
       if (changeInfo.title === undefined) return;
       const app = state.apps.find((a) => a.folderId === id);
       if (!app) return;
@@ -1410,13 +1410,13 @@
     });
     // 书签被创建/删除/移动时也触发同步（bookmarkChange 模式）
     const syncOnBookmark = () => maybeSync('bookmarkChange');
-    browser.bookmarks.onCreated.addListener(syncOnBookmark);
-    browser.bookmarks.onRemoved.addListener(syncOnBookmark);
-    browser.bookmarks.onMoved.addListener(syncOnBookmark);
+    GG.api.bookmarks.onCreated.addListener(syncOnBookmark);
+    GG.api.bookmarks.onRemoved.addListener(syncOnBookmark);
+    GG.api.bookmarks.onMoved.addListener(syncOnBookmark);
     // open menu close
 
     // reload everything when config imported/cleared from settings page
-    browser.runtime.onMessage.addListener((msg) => {
+    GG.api.runtime.onMessage.addListener((msg) => {
       if (msg && msg.type === 'gg-config-imported') {
         reloadAndRender();
       }

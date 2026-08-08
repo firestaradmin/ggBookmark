@@ -2,25 +2,20 @@
   "manifest_version": 3,
   "name": "GG Bookmark - 书签起始页",
   "version": "1.0.0",
-  "description": "现代风格的 Firefox 书签起始页：分类网格卡片、可自定义背景、书签整理器。",
+  "description": "现代风格的 Chrome 书签起始页：分类网格卡片、可自定义背景、书签整理器。",
   "permissions": [
     "bookmarks",
     "storage",
     "tabs",
-    "alarms"
+    "alarms",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "ggbookmark@fire.home",
-      "strict_min_version": "78.0"
-    }
-  },
   "icons": {
-    "48": "icons/GGBookmarkLOGO.ico",
-    "96": "icons/GGBookmarkLOGO.ico"
+    "48": "icons/GGBookmarkLOGO.png",
+    "128": "icons/GGBookmarkLOGO.png"
   },
   "background": {
     "service_worker": "lib/background.js"
@@ -29,17 +24,14 @@
     "page": "pages/newtab/newtab.html",
     "open_in_tab": true
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["lib/*"],
-      "matches": ["<all_urls>"]
-    }
-  ],
   "chrome_url_overrides": {
     "newtab": "pages/newtab/newtab.html"
   },
   "action": {
     "default_title": "GG Bookmark",
-    "default_icon": "icons/GGBookmarkLOGO.ico"
+    "default_icon": {
+      "48": "icons/GGBookmarkLOGO.png",
+      "128": "icons/GGBookmarkLOGO.png"
+    }
   }
 }
