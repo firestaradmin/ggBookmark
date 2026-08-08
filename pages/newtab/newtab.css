@@ -1,5 +1,10 @@
 /* GG Bookmark - new tab page styles */
 
+/* body 用纵向 flex：顶部固定，scroll 填满剩余，避免 topbar 被推离视口 */
+body {
+  display: flex;
+  flex-direction: column;
+}
 :root {
   --topbar-h: 68px;
 }
@@ -9,7 +14,9 @@
 .scroll {
   position: relative;
   z-index: 1;
-  height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   overflow-y: auto;
   overflow-x: auto;
 }

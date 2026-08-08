@@ -58,7 +58,8 @@ GG.icons = {
     help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
     circle: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z"></path></svg>',
     close_x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-    selectSon:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 10L8 10V14H4V10ZM4 19V16H8V19H4ZM10 19V16H14V19H10ZM16 19V16H20V19H16ZM16 14V10H20V14H16ZM16 8V5H20V8H16ZM14 5V8H10V5H14ZM14 10V14H10V10H14ZM4 8V5H8V8L4 8ZM3 3C2.44772 3 2 3.44772 2 4V20C2 20.5523 2.44772 21 3 21H21C21.5523 21 22 20.5523 22 20V4C22 3.44772 21.5523 3 21 3H3Z"></path></svg>',
+    selectSon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 10L8 10V14H4V10ZM4 19V16H8V19H4ZM10 19V16H14V19H10ZM16 19V16H20V19H16ZM16 14V10H20V14H16ZM16 8V5H20V8H16ZM14 5V8H10V5H14ZM14 10V14H10V10H14ZM4 8V5H8V8L4 8ZM3 3C2.44772 3 2 3.44772 2 4V20C2 20.5523 2.44772 21 3 21H21C21.5523 21 22 20.5523 22 20V4C22 3.44772 21.5523 3 21 3H3Z"></path></svg>',
+    rename:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.9042 2.10025L20.8037 3.51446L22.2179 13.414L13.0255 22.6063C12.635 22.9969 12.0019 22.9969 11.6113 22.6063L1.71184 12.7069C1.32131 12.3163 1.32131 11.6832 1.71184 11.2926L10.9042 2.10025ZM11.6113 4.22157L3.83316 11.9997L12.3184 20.485L20.0966 12.7069L19.036 5.28223L11.6113 4.22157ZM13.7327 10.5855C12.9516 9.80448 12.9516 8.53815 13.7327 7.7571C14.5137 6.97606 15.78 6.97606 16.5611 7.7571C17.3421 8.53815 17.3421 9.80448 16.5611 10.5855C15.78 11.3666 14.5137 11.3666 13.7327 10.5855Z"></path></svg>',
 };
 
 GG.icon = function (name) {
@@ -78,22 +79,28 @@ GG.icon = function (name) {
   const MARGIN = 6;         // 气泡距视口边缘的最小距离
   const HOVER_DELAY = 500; // 悬浮多久后显示
 
+  // 用鼠标事件坐标定位 tooltip，绕开某些布局下 getBoundingClientRect 异常的问题。
+  // 目标：tooltip 显示在鼠标附近（控件下方）。show 前由 mouseover 记录鼠标位置。
+  let lastClientX = 0, lastClientY = 0;
   function place(target) {
-    const rect = target.getBoundingClientRect();
-    const tipRect = tipEl.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
     const vh = document.documentElement.clientHeight;
+    // 先放到 0,0 强制布局，再测真实尺寸
+    tipEl.style.left = '0px';
+    tipEl.style.top = '0px';
+    const tw = tipEl.offsetWidth;
+    const th = tipEl.offsetHeight;
 
-    // 水平：优先居中对齐目标，再夹紧到视口内
-    let left = rect.left + rect.width / 2 - tipRect.width / 2;
-    left = Math.max(MARGIN, Math.min(left, vw - tipRect.width - MARGIN));
-
-    // 垂直：默认在目标下方居中；下方空间不足则翻转到上方
-    let top = rect.bottom + GAP;
-    if (top + tipRect.height > vh - MARGIN) {
-      top = rect.top - tipRect.height - GAP;
-      if (top < MARGIN) top = Math.max(MARGIN, vh - tipRect.height - MARGIN);
+    // 水平：以鼠标 X 为基准居中，再夹紧到视口内
+    let left = lastClientX - tw / 2;
+    left = Math.max(MARGIN, Math.min(left, vw - tw - MARGIN));
+    // 垂直：鼠标下方
+    let top = lastClientY + GAP;
+    if (top + th > vh - MARGIN) {
+      top = lastClientY - th - GAP;
+      if (top < MARGIN) top = MARGIN;
     }
+    top = Math.min(top, Math.max(MARGIN, vh - th - MARGIN));
     tipEl.style.left = left + 'px';
     tipEl.style.top = top + 'px';
   }
@@ -124,7 +131,11 @@ GG.icon = function (name) {
   // 捕获阶段委托：进入/悬停在 [data-tip] 元素内时安排显示
   document.addEventListener('mouseover', (e) => {
     const target = e.target.closest('[data-tip]');
-    if (target) schedule(target);
+    if (target) {
+      lastClientX = e.clientX;
+      lastClientY = e.clientY;
+      schedule(target);
+    }
   }, true);
 
   // 离开 [data-tip] 元素（鼠标移到元素外）时才隐藏
