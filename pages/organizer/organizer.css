@@ -81,11 +81,17 @@
 .panel-tab .tab-close:hover { background: rgba(255,255,255,.14); color: #fff; }
 .panel-tab-add {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; padding: 0;
-  background: transparent; color: var(--text-dim); cursor: pointer;
-  border-radius: 10px 10px 0 0; font-size: 18px;
+  width: 32px; height: 32px; align-self: center; margin-left: 6px;
+  padding: 0;
+  background: var(--glass); color: var(--text-dim); cursor: pointer;
+  border: 1px solid var(--glass-border); border-radius: 8px;
+  transition: all .18s ease;
 }
-.panel-tab-add:hover { background: var(--glass); color: #fff; }
+.panel-tab-add svg { width: 16px; height: 16px; }
+.panel-tab-add:hover {
+  background: var(--glass-strong); color: var(--text);
+  border-color: rgba(255,255,255,.25);
+}
 
 /* Panels: each holds a single folder view; multiple shown side by side */
 .panels {

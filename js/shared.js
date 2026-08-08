@@ -54,12 +54,89 @@ GG.icons = {
     return: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M22.0003 13.0001L22.0004 11.0002L5.82845 11.0002L9.77817 7.05044L8.36396 5.63623L2 12.0002L8.36396 18.3642L9.77817 16.9499L5.8284 13.0002L22.0003 13.0001Z"></path></svg>',
     foldUp:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 13.9142L16.7929 18.7071L18.2071 17.2929L12 11.0858L5.79289 17.2929L7.20711 18.7071L12 13.9142ZM6 7L18 7V9L6 9L6 7Z"></path></svg>',
     help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
+    circle: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z"></path></svg>',
+    close_x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
 
 };
 
 GG.icon = function (name) {
   return GG.icons[name] || '';
 };
+
+/* ---- Custom tooltip driver ----
+ * 监听 [data-tip] 元素的 hover，动态创建 .gg-tip 气泡并夹紧到视口内。
+ * 默认位置为下方居中；空间不足时自动翻转到上方。鼠标悬浮超过
+ * HOVER_DELAY(ms) 后才显示，离开即隐藏。
+ * 使用 mouseover/mouseout（冒泡）+ closest 委托，配合 contains 判断
+ * 是否仍在元素内，避免鼠标在元素内部移动时气泡闪烁。 */
+(function () {
+  let tipEl = null;
+  let showTimer = null;
+  const GAP = 8;            // 气泡与目标元素的间距
+  const MARGIN = 6;         // 气泡距视口边缘的最小距离
+  const HOVER_DELAY = 500; // 悬浮多久后显示
+
+  function place(target) {
+    const rect = target.getBoundingClientRect();
+    const tipRect = tipEl.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+
+    // 水平：优先居中对齐目标，再夹紧到视口内
+    let left = rect.left + rect.width / 2 - tipRect.width / 2;
+    left = Math.max(MARGIN, Math.min(left, vw - tipRect.width - MARGIN));
+
+    // 垂直：默认在目标下方居中；下方空间不足则翻转到上方
+    let top = rect.bottom + GAP;
+    if (top + tipRect.height > vh - MARGIN) {
+      top = rect.top - tipRect.height - GAP;
+      if (top < MARGIN) top = Math.max(MARGIN, vh - tipRect.height - MARGIN);
+    }
+    tipEl.style.left = left + 'px';
+    tipEl.style.top = top + 'px';
+  }
+
+  function show(target) {
+    if (!target || !target.dataset.tip) return;
+    tipEl = document.createElement('div');
+    tipEl.className = 'gg-tip';
+    tipEl.textContent = target.dataset.tip;
+    document.body.appendChild(tipEl);
+    place(target);
+    requestAnimationFrame(() => tipEl.classList.add('show'));
+  }
+
+  function hide() {
+    if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+    if (tipEl) { tipEl.remove(); tipEl = null; }
+  }
+
+  function schedule(target) {
+    if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+    showTimer = setTimeout(() => show(target), HOVER_DELAY);
+  }
+
+  // 捕获阶段委托：进入/悬停在 [data-tip] 元素内时安排显示
+  document.addEventListener('mouseover', (e) => {
+    const target = e.target.closest('[data-tip]');
+    if (target) schedule(target);
+  }, true);
+
+  // 离开 [data-tip] 元素（鼠标移到元素外）时才隐藏
+  document.addEventListener('mouseout', (e) => {
+    const target = e.target.closest('[data-tip]');
+    if (!target) return;
+    const related = e.relatedTarget;
+    // 鼠标仍停留在同一 [data-tip] 元素内部则忽略
+    if (related && target.contains(related)) return;
+    hide();
+  }, true);
+
+  // 拖拽/滚动时隐藏，避免气泡残留
+  document.addEventListener('scroll', hide, true);
+  // 点击时隐藏（点击按钮会改变按钮状态/位置，可能破坏 mouseout 判定，导致旧气泡残留）
+  document.addEventListener('click', hide, true);
+})();
 
 /* ---- favicon 本地缓存 ----
  * favicon 图片获取成功后按「来源 + 网站 url」缓存到 chrome.storage.local，

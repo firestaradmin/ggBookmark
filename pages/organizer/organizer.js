@@ -220,7 +220,7 @@
       tabs.appendChild(tab);
     });
     const add = document.createElement('button');
-    add.className = 'panel-tab-add'; add.textContent = '+'; add.title = '新建并列面板';
+    add.className = 'panel-tab-add'; add.innerHTML = GG.icon('folderPlus'); add.dataset.tip = '新建并列面板';
     add.addEventListener('click', () => addPanel(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
     tabs.appendChild(add);
   }
@@ -247,11 +247,11 @@
       actions.className = 'ph-actions';
       const btnSwitch = document.createElement('button');
       btnSwitch.className = 'ph-btn'; btnSwitch.title = '切换此面板文件夹（点选左侧树）';
-      btnSwitch.innerHTML = GG.icon('folderPlus');
+      btnSwitch.innerHTML = GG.icon('circle');
       btnSwitch.addEventListener('click', () => { activePanelId = p.id; renderTabs(); markActivePanel(); updateToolbar(); });
       const btnClose = document.createElement('button');
       btnClose.className = 'ph-btn'; btnClose.title = '关闭面板';
-      btnClose.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+      btnClose.innerHTML = GG.icon('close_x');
       btnClose.addEventListener('click', () => closePanel(p.id));
       actions.append(btnSwitch, btnClose);
       head.append(hIcon, hTitle, actions);
