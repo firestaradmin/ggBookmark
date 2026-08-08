@@ -429,3 +429,45 @@ html[data-theme="light"] .searchwrap input::placeholder { color: #8a97b3; }
   padding: 14px 18px;
   border-top: 1px solid var(--glass-border-soft);
 }
+
+/* 新建文件夹 - 树形位置选择 */
+.gg-fc-tree {
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 6px;
+}
+.gg-fc-node { user-select: none; }
+.gg-fc-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.gg-fc-row:hover { background: var(--glass-strong); }
+.gg-fc-row.selected { background: rgba(79,124,255,.18); }
+.gg-fc-toggle {
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  transform: rotate(90deg);
+  transition: transform .15s ease;
+}
+.gg-fc-toggle.collapsed { transform: rotate(0deg); }
+.gg-fc-toggle-empty { width: 16px; height: 16px; flex-shrink: 0; }
+.gg-fc-toggle svg { width: 100%; height: 100%; }
+.gg-fc-ico { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+.gg-fc-ico svg { width: 100%; height: 100%; }
+.gg-fc-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gg-fc-children { margin-left: 12px; }
+.gg-fc-children.collapsed { display: none; }

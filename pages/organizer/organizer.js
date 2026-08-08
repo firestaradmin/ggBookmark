@@ -530,20 +530,24 @@
     }
   }
 
+  // 新建文件夹（浮动窗口：名称 + 树形位置选择）
   async function newFolder(parentId) {
-    const name = prompt('文件夹名称：', '新文件夹');
-    if (!name || !name.trim()) return;
-    const node = await GG.api.bookmarks.create({ parentId, title: name.trim() });
-    collapse.delete(node.id);
-    refresh();
-  }
-
-  async function newFolder(parentId) {
-    const name = prompt('文件夹名称：', '新文件夹');
-    if (!name || !name.trim()) return;
-    const node = await GG.api.bookmarks.create({ parentId, title: name.trim() });
-    collapse.delete(node.id);
-    refresh();
+    if (!GG.folderCreator) { GG.toast.show('编辑器不可用', 'error'); return; }
+    const tree = await GG.api.bookmarks.getTree();
+    GG.folderCreator.open({
+      tree,
+      defaultId: parentId || DEFAULT_ROOT,
+      onSave: async (data) => {
+        try {
+          const node = await GG.api.bookmarks.create({ parentId: data.parentId, title: data.name });
+          collapse.delete(node.id);
+          refresh();
+          GG.toast.show('文件夹已创建', 'success');
+        } catch (e) {
+          GG.toast.show('创建失败：' + (e && e.message), 'error');
+        }
+      }
+    });
   }
 
   function openFolderMenu(anchor, node) {

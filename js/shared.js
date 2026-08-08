@@ -360,3 +360,162 @@ GG.bookmarkEditor = (function () {
   return { open, close };
 })();
 
+/* ---- 可复用新建文件夹浮动窗口 ----
+ * 用法：
+ *   GG.folderCreator.open({
+ *     tree: <书签树节点数组（含 type/children）>,
+ *     defaultId: <默认父文件夹 id>,
+ *     onSave: (data) => { ... }  // data = { name, parentId }，调用方创建文件夹
+ *   });
+ * 包含：名称输入 + 树形位置选择（可展开折叠、单选）。
+ */
+GG.folderCreator = (function () {
+  let overlay = null;
+  let selectedId = null;
+
+  function open(opts) {
+    opts = opts || {};
+    if (overlay) close();
+    selectedId = opts.defaultId || null;
+
+    overlay = document.createElement('div');
+    overlay.className = 'gg-editor-overlay';
+
+    const box = document.createElement('div');
+    box.className = 'gg-editor';
+
+    const head = document.createElement('div');
+    head.className = 'gg-editor-head';
+    const hTitle = document.createElement('div');
+    hTitle.className = 'gg-editor-title';
+    hTitle.textContent = '新建文件夹';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'gg-editor-close';
+    closeBtn.innerHTML = GG.icon('close_x');
+    closeBtn.title = '关闭';
+    head.append(hTitle, closeBtn);
+
+    const body = document.createElement('div');
+    body.className = 'gg-editor-body';
+
+    // 名称
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'gg-editor-field';
+    const nameLb = document.createElement('label');
+    nameLb.textContent = '文件夹名称';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = '';
+    nameInput.placeholder = '新文件夹';
+    nameInput.spellcheck = false;
+    nameWrap.append(nameLb, nameInput);
+
+    // 位置
+    const locWrap = document.createElement('div');
+    locWrap.className = 'gg-editor-field';
+    const locLb = document.createElement('label');
+    locLb.textContent = '位置（父文件夹）';
+    const treeBox = document.createElement('div');
+    treeBox.className = 'gg-fc-tree';
+    const nodes = (opts.tree && opts.tree[0] && opts.tree[0].children) || opts.tree || [];
+
+    // 判断 selectedId 是否位于 node 的子树内（用于自动展开路径）
+    function containsSelected(node) {
+      if (selectedId === node.id) return true;
+      return (node.children || []).some(containsSelected);
+    }
+
+    nodes.forEach((n) => { if (n.type === 'folder' || n.type === undefined) treeBox.appendChild(buildNode(n, 0)); });
+    locWrap.append(locLb, treeBox);
+
+    body.append(nameWrap, locWrap);
+
+    const foot = document.createElement('div');
+    foot.className = 'gg-editor-foot';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn';
+    cancelBtn.textContent = '取消';
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn primary';
+    saveBtn.textContent = '创建';
+    foot.append(cancelBtn, saveBtn);
+
+    box.append(head, body, foot);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    nameInput.focus();
+
+    function buildNode(node, depth) {
+      const wrap = document.createElement('div');
+      wrap.className = 'gg-fc-node';
+      const children = (node.children || []).filter((c) => c.type === 'folder' || c.type === undefined);
+      const isSelected = selectedId === node.id;
+      const onPath = containsSelected(node); // 该节点是默认位置的路径（含自身）
+      const row = document.createElement('div');
+      row.className = 'gg-fc-row' + (isSelected ? ' selected' : '');
+      row.dataset.id = node.id;
+      row.style.paddingLeft = (8 + depth * 14) + 'px';
+
+      const toggle = document.createElement('span');
+      if (children.length) {
+        // 路径上的节点默认展开，否则折叠
+        toggle.className = 'gg-fc-toggle' + (onPath ? '' : ' collapsed');
+        toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
+        toggle.addEventListener('click', (e) => { e.stopPropagation(); toggle.classList.toggle('collapsed'); const sub = wrap.querySelector(':scope > .gg-fc-children'); if (sub) sub.classList.toggle('collapsed'); });
+      } else {
+        toggle.className = 'gg-fc-toggle gg-fc-toggle-empty';
+      }
+
+      const ico = document.createElement('span');
+      ico.className = 'gg-fc-ico';
+      ico.innerHTML = GG.icon('folder');
+
+      const name = document.createElement('span');
+      name.className = 'gg-fc-name';
+      name.textContent = node.title || '（未命名）';
+
+      row.append(toggle, ico, name);
+      row.addEventListener('click', () => {
+        selectedId = node.id;
+        treeBox.querySelectorAll('.gg-fc-row').forEach((r) => r.classList.remove('selected'));
+        row.classList.add('selected');
+      });
+
+      wrap.appendChild(row);
+      if (children.length) {
+        const sub = document.createElement('div');
+        sub.className = 'gg-fc-children' + (onPath ? '' : ' collapsed');
+        children.forEach((c) => sub.appendChild(buildNode(c, depth + 1)));
+        wrap.appendChild(sub);
+      }
+      return wrap;
+    }
+
+    function destroy() {
+      if (overlay) { overlay.remove(); overlay = null; }
+    }
+    function save() {
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      if (!selectedId) { GG.toast.show('请选择文件夹位置', 'info'); return; }
+      destroy();
+      if (opts.onSave) opts.onSave({ name, parentId: selectedId });
+    }
+
+    closeBtn.addEventListener('click', destroy);
+    cancelBtn.addEventListener('click', destroy);
+    saveBtn.addEventListener('click', save);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) destroy(); });
+    const onKey = (e) => { if (e.key === 'Enter') save(); else if (e.key === 'Escape') destroy(); };
+    nameInput.addEventListener('keydown', onKey);
+  }
+
+  function close() {
+    if (overlay) { overlay.remove(); overlay = null; }
+  }
+
+  return { open, close };
+})();
+
+
