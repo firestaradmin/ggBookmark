@@ -14,8 +14,10 @@
     "<all_urls>"
   ],
   "icons": {
-    "48": "icons/GGBookmarkLOGO.png",
-    "128": "icons/GGBookmarkLOGO.png"
+    "16": "icons/GGBookmark16.png",
+    "32": "icons/GGBookmark32.png",
+    "48": "icons/GGBookmark48.png",
+    "128": "icons/GGBookmark128.png"
   },
   "background": {
     "service_worker": "lib/background.js"
@@ -30,8 +32,10 @@
   "action": {
     "default_title": "GG Bookmark",
     "default_icon": {
-      "48": "icons/GGBookmarkLOGO.png",
-      "128": "icons/GGBookmarkLOGO.png"
+      "16": "icons/GGBookmark16.png",
+      "32": "icons/GGBookmark32.png",
+      "48": "icons/GGBookmark48.png",
+      "128": "icons/GGBookmark128.png"
     }
   }
 }
