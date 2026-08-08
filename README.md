@@ -58,9 +58,9 @@ GG Bookmark 致力于让操作毫不费力：即时搜索、可视化整理、�
 
 ### 设置页面
 
-<img src="./assets/assets_README/PixPin_2026-08-08_23-33-08.png" alt="PixPin_2026-08-08_23-33-08" style="zoom:50%;" />
+<img src="./assets/assets_README/PixPin_2026-08-08_23-33-08.png" alt="PixPin_2026-08-08_23-33-08" style="zoom: 25%;" />
 
-<img src="./assets/assets_README/PixPin_2026-08-08_23-33-16.png" alt="PixPin_2026-08-08_23-33-16" style="zoom:50%;" />
+<img src="./assets/assets_README/PixPin_2026-08-08_23-33-16.png" alt="PixPin_2026-08-08_23-33-16" style="zoom: 25%;" />
 
 ### 书签整理页面
 
