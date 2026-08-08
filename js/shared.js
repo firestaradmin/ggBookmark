@@ -32,11 +32,13 @@ GG.icons = {
   folderOpen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v2H7l-3 6V7z"/><path d="M3 13l3-6"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   drag: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>',
-  folderPlus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5" stroke-linecap="round"/></svg>',
+  panelSide: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11 5H5V19H11V5ZM13 5V19H19V5H13ZM4 3H20C20.5523 3 21 3.44772 21 4V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V4C3 3.44772 3.44772 3 4 3Z"></path></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>',
   target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>',
   backspace: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H9l-6-9z"/><path d="M7 10l6 6M13 10l-6 6"/></svg>',
-  external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>',
+    external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>',
+  copy: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6.9998 6V3C6.9998 2.44772 7.44752 2 7.9998 2H19.9998C20.5521 2 20.9998 2.44772 20.9998 3V17C20.9998 17.5523 20.5521 18 19.9998 18H16.9998V20.9991C16.9998 21.5519 16.5499 22 15.993 22H4.00666C3.45059 22 3 21.5554 3 20.9991L3.0026 7.00087C3.0027 6.44811 3.45264 6 4.00942 6H6.9998ZM5.00242 8L5.00019 20H14.9998V8H5.00242ZM8.9998 6H16.9998V16H18.9998V4H8.9998V6Z"></path></svg>',
+  edit:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6.41421 15.89L16.5563 5.74785L15.1421 4.33363L5 14.4758V15.89H6.41421ZM7.24264 17.89H3V13.6473L14.435 2.21231C14.8256 1.82179 15.4587 1.82179 15.8492 2.21231L18.6777 5.04074C19.0682 5.43126 19.0682 6.06443 18.6777 6.45495L7.24264 17.89ZM3 19.89H21V21.89H3V19.89Z"></path></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
   fit: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.9995 13.4995 16.9492 18.4493 12.9995 18.4483 12.9995 22.9995H10.9995L10.9995 18.4478 7.05222 18.4468 11.9995 13.4995ZM10.9995.999512 10.9995 5.54964 7.05026 5.54956 12 10.4995 16.9497 5.54977 12.9995 5.54968V.999512L10.9995.999512Z"></path></svg>',
   fitAuto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v18M16 3v18"/><path d="M8 8h8M8 16h8"/><path d="M5 5l3-2M11 5l3-2M5 19l3 2M11 19l3 2M19 5l-3-2M13 5l-3-2M19 19l-3 2M13 19l-3 2"/></svg>',
@@ -56,7 +58,7 @@ GG.icons = {
     help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
     circle: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z"></path></svg>',
     close_x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-
+    selectSon:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 10L8 10V14H4V10ZM4 19V16H8V19H4ZM10 19V16H14V19H10ZM16 19V16H20V19H16ZM16 14V10H20V14H16ZM16 8V5H20V8H16ZM14 5V8H10V5H14ZM14 10V14H10V10H14ZM4 8V5H8V8L4 8ZM3 3C2.44772 3 2 3.44772 2 4V20C2 20.5523 2.44772 21 3 21H21C21.5523 21 22 20.5523 22 20V4C22 3.44772 21.5523 3 21 3H3Z"></path></svg>',
 };
 
 GG.icon = function (name) {
@@ -249,3 +251,112 @@ GG.renderFavicon = function (container, url, title, source) {
     img.src = src;
   })();
 };
+
+/* ---- 可复用书签编辑浮动窗口 ----
+ * 用法：
+ *   GG.bookmarkEditor.open({
+ *     title: '当前名称', url: '当前链接',
+ *     onSave: async (data) => {  data = {title, url} 调用方保存并刷新 
+ *   });
+ * 居中浮动、毛玻璃、名称+链接输入、保存/取消。
+ */
+GG.bookmarkEditor = (function () {
+  let overlay = null;
+
+  function open(opts) {
+    opts = opts || {};
+    if (overlay) close();
+
+    overlay = document.createElement('div');
+    overlay.className = 'gg-editor-overlay';
+
+    const box = document.createElement('div');
+    box.className = 'gg-editor';
+
+    const head = document.createElement('div');
+    head.className = 'gg-editor-head';
+    const hTitle = document.createElement('div');
+    hTitle.className = 'gg-editor-title';
+    hTitle.textContent = opts.titleOnly ? '编辑名称' : '编辑书签';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'gg-editor-close';
+    closeBtn.innerHTML = GG.icon('close_x');
+    closeBtn.title = '关闭';
+    head.append(hTitle, closeBtn);
+
+    const body = document.createElement('div');
+    body.className = 'gg-editor-body';
+
+    const nameField = field('名称', opts.title || '');
+    body.append(nameField.wrap);
+    let urlField = null;
+    if (!opts.titleOnly) {
+      urlField = field('链接', opts.url || '');
+      body.append(urlField.wrap);
+    }
+
+    const foot = document.createElement('div');
+    foot.className = 'gg-editor-foot';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn';
+    cancelBtn.textContent = '取消';
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn primary';
+    saveBtn.textContent = '保存';
+    foot.append(cancelBtn, saveBtn);
+
+    box.append(head, body, foot);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    function field(label, value) {
+      const wrap = document.createElement('div');
+      wrap.className = 'gg-editor-field';
+      const lb = document.createElement('label');
+      lb.textContent = label;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = value || '';
+      input.spellcheck = false;
+      wrap.append(lb, input);
+      return { wrap, input };
+    }
+
+    nameField.input.focus();
+    nameField.input.select();
+
+    function destroy() {
+      if (overlay) { overlay.remove(); overlay = null; }
+    }
+    function save() {
+      const title = nameField.input.value.trim();
+      if (!opts.titleOnly) {
+        const url = urlField.input.value.trim();
+        if (!url) { urlField.input.focus(); return; }
+        destroy();
+        if (opts.onSave) opts.onSave({ title, url });
+        return;
+      }
+      destroy();
+      if (opts.onSave) opts.onSave({ title });
+    }
+
+    closeBtn.addEventListener('click', destroy);
+    cancelBtn.addEventListener('click', destroy);
+    saveBtn.addEventListener('click', save);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) destroy(); });
+    const onKey = (e) => {
+      if (e.key === 'Enter') save();
+      else if (e.key === 'Escape') destroy();
+    };
+    nameField.input.addEventListener('keydown', onKey);
+    urlField.input.addEventListener('keydown', onKey);
+  }
+
+  function close() {
+    if (overlay) { overlay.remove(); overlay = null; }
+  }
+
+  return { open, close };
+})();
+

@@ -200,8 +200,8 @@
     menu.className = 'menu glass pin-ctx';
     const items = [
       { label: '在新标签打开', ic: 'external', fn: () => GG.api.tabs.create({ url: pin.url }) },
-      { label: '复制链接', ic: 'external', fn: () => navigator.clipboard.writeText(pin.url).then(() => GG.toast.show('已复制链接', 'success')) },
-      { label: '重命名', ic: 'settings', fn: () => renamePin(idx) },
+      { label: '复制链接', ic: 'copy', fn: () => navigator.clipboard.writeText(pin.url).then(() => GG.toast.show('已复制链接', 'success')) },
+      { label: '编辑书签', ic: 'settings', fn: () => editPin(idx) },
       { label: '取消置顶', ic: 'backspace', fn: () => removePin(idx), danger: true }
     ];
     items.forEach((it) => {
@@ -227,14 +227,21 @@
     persist();
     renderPinbar();
   }
-  function renamePin(idx) {
+  function editPin(idx) {
     const pin = state.pinned[idx];
     if (!pin) return;
-    const t = prompt('置顶名称：', pin.title || '');
-    if (!t || !t.trim()) return;
-    pin.title = t.trim();
-    persist();
-    renderPinbar();
+    if (!GG.bookmarkEditor) return;
+    GG.bookmarkEditor.open({
+      title: pin.title,
+      url: pin.url,
+      onSave: (data) => {
+        pin.title = data.title || pin.title;
+        pin.url = data.url || pin.url;
+        persist();
+        renderPinbar();
+        GG.toast.show('已更新置顶', 'success');
+      }
+    });
   }
   function addPin(url, title) {
     if (!url) return;
@@ -508,7 +515,8 @@
       menu.appendChild(b);
     };
     add('打开', 'external', () => GG.api.tabs.create({ url: bm.url }));
-    add('复制链接', 'external', () => navigator.clipboard.writeText(bm.url).then(() => GG.toast.show('已复制链接', 'success')));
+    add('复制链接', 'copy', () => navigator.clipboard.writeText(bm.url).then(() => GG.toast.show('已复制链接', 'success')));
+    add('编辑书签', 'settings', () => editBookmark(bm, tile));
     add('置顶到快速访问', 'target', () => { addPin(bm.url, bm.title); GG.toast.show('已添加到置顶', 'success'); });
     add('移出卡片', 'backspace', () => removeTile(tile, bm, card));
     add('删除书签', 'trash', () => deleteBookmark(tile, bm, card), true);
@@ -547,6 +555,38 @@
       pushUndo({ type: 'restoreBookmark', bookmarkId: bm.id, parentId: (card.dataset.folderId) });
       GG.toast.show('已删除', 'success');
     }, () => GG.toast.show('删除失败', 'error'));
+  }
+
+  // 编辑书签（名称/链接），通过可复用浮动窗口
+  function editBookmark(bm, tile) {
+    if (!GG.bookmarkEditor) return;
+    GG.bookmarkEditor.open({
+      title: bm.title,
+      url: bm.url,
+      onSave: async (data) => {
+        const changes = {};
+        if (data.title && data.title !== bm.title) changes.title = data.title;
+        if (data.url && data.url !== bm.url) changes.url = data.url;
+        if (!Object.keys(changes).length) return;
+        try {
+          await GG.api.bookmarks.update(bm.id, changes);
+          // 更新本地显示
+          bm.title = data.title || bm.title;
+          bm.url = data.url || bm.url;
+          if (tile) {
+            tile.querySelector('.tile-title').textContent = bm.title || (function () { try { return new URL(bm.url).host; } catch (e) { return bm.url; } })();
+            tile.querySelector('.tile-desc').textContent = hostOf(bm.url);
+            tile.dataset.url = bm.url;
+            tile.dataset.title = bm.title || bm.url;
+            const icon = tile.querySelector('.tile-icon');
+            GG.renderFavicon(icon, bm.url, bm.title, (state.settings && state.settings.faviconSource) || GG.DEFAULTS.faviconSource);
+          }
+          GG.toast.show('已更新书签', 'success');
+        } catch (e) {
+          GG.toast.show('更新失败：' + (e && e.message), 'error');
+        }
+      }
+    });
   }
 
   // ---------- Card rendering ----------
@@ -656,7 +696,7 @@
       body.innerHTML = '';
       const ph = document.createElement('button');
       ph.className = 'card-set-folder';
-      ph.innerHTML = GG.icon('folderPlus') + '<span>设置文件夹</span>';
+      ph.innerHTML = GG.icon('panelSide') + '<span>设置文件夹</span>';
       ph.addEventListener('click', (e) => { e.stopPropagation(); openPicker(card, app); });
       body.appendChild(ph);
     } else {
@@ -978,7 +1018,7 @@
       menu.appendChild(b);
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
-    add('包含子文件夹', 'folderPlus', () => { app.recursive = !app.recursive; persist(); renderCards(); });
+    add('包含子文件夹', 'selectSon', () => { app.recursive = !app.recursive; persist(); renderCards(); });
     add('重命名', 'settings', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
     more.innerHTML = GG.icon('settings');

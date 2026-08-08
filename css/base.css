@@ -352,3 +352,80 @@ html[data-theme="light"] .searchwrap input::placeholder { color: #8a97b3; }
   gap: 10px;
 }
 .btn-ghost { opacity: .8; }
+
+/* 书签编辑浮动窗口 */
+.gg-editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  animation: gg-fade .15s ease;
+}
+.gg-editor {
+  width: 420px;
+  max-width: 92vw;
+  background: var(--bg-base);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.gg-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--glass-border-soft);
+}
+.gg-editor-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.gg-editor-close {
+  width: 28px; height: 28px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  color: var(--text-dim);
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.gg-editor-close:hover { background: var(--glass-strong); color: var(--text); }
+.gg-editor-close svg { width: 16px; height: 16px; }
+.gg-editor-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.gg-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gg-editor-field label {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.gg-editor-field input {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  outline: none;
+}
+.gg-editor-field input:focus { border-color: var(--accent); }
+.gg-editor-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--glass-border-soft);
+}

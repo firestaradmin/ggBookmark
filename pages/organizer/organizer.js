@@ -141,8 +141,8 @@
       e.preventDefault(); e.stopPropagation();
       openCtxMenu(e.clientX, e.clientY, [
         { label: '在面板中打开', ic: 'folder', fn: () => { if (activePanel()) setPanelFolder(activePanelId, node.id); else addPanel(node.id); } },
-        { label: '新建并列面板', ic: 'folderPlus', fn: () => addPanel(node.id) },
-        { label: '在此新建文件夹', ic: 'folderPlus', fn: () => newFolder(node.id) },
+        { label: '新建并列面板', ic: 'panelSide', fn: () => addPanel(node.id) },
+        { label: '在此新建文件夹', ic: 'folder', fn: () => newFolder(node.id) },
         { label: '重命名', ic: 'settings', fn: () => promptRename(node) },
         { label: '删除文件夹', ic: 'trash', fn: () => deleteItem(node), danger: true }
       ]);
@@ -220,7 +220,7 @@
       tabs.appendChild(tab);
     });
     const add = document.createElement('button');
-    add.className = 'panel-tab-add'; add.innerHTML = GG.icon('folderPlus'); add.dataset.tip = '新建并列面板';
+    add.className = 'panel-tab-add'; add.innerHTML = GG.icon('panelSide'); add.dataset.tip = '新建并列面板';
     add.addEventListener('click', () => addPanel(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
     tabs.appendChild(add);
   }
@@ -344,8 +344,7 @@
       if (node.type === 'bookmark') {
         openCtxMenu(e.clientX, e.clientY, [
           { label: '打开链接', ic: 'external', fn: () => GG.api.tabs.create({ url: node.url }) },
-          { label: '编辑', ic: 'settings', fn: () => promptRename(node) },
-          { label: '编辑链接', ic: 'external', fn: () => editBookmarkUrl(node) },
+          { label: '编辑书签', ic: 'settings', fn: () => editBookmark(node) },
           { label: '删除书签', ic: 'trash', fn: () => deleteItem(node), danger: true }
         ]);
       } else {
@@ -413,7 +412,7 @@
       activePanelId = p.id; markActivePanel(); renderTabs(); updateToolbar();
       const folderNode = findFolderNode(p.folderId);
       const items = [
-        { label: '在此新建文件夹', ic: 'folderPlus', fn: () => newFolder(p.folderId) },
+        { label: '在此新建文件夹', ic: 'folder', fn: () => newFolder(p.folderId) },
         { label: '刷新', ic: 'settings', fn: () => renderPanel(p) }
       ];
       if (folderNode) {
@@ -539,25 +538,12 @@
     refresh();
   }
 
-  function openRename(node) {
-    const nameEl = document.querySelector(`.tree-node[data-id="${node.id}"] .tr-name`);
-    if (!nameEl) return;
-    nameEl.innerHTML = '';
-    const input = document.createElement('input');
-    input.value = node.title || '';
-    nameEl.appendChild(input);
-    input.focus(); input.select();
-    input.addEventListener('keydown', async (e) => { if (e.key === 'Enter') commitRename(node, input.value); if (e.key === 'Escape') nameEl.textContent = node.title; });
-    input.addEventListener('blur', () => commitRename(node, input.value));
-  }
-  async function commitRename(node, title) {
-    const t = (title || '').trim();
-    if (!t) { renderFolderTree(); return; }
-    const oldTitle = node.title;
-    if (t !== oldTitle) {
-      try { await GG.api.bookmarks.update(node.id, { title: t }); pushHistory({ type: 'rename', id: node.id, was: oldTitle }); GG.toast.show('已重命名', 'success'); renderFolderTree(); }
-      catch (e) { renderFolderTree(); }
-    }
+  async function newFolder(parentId) {
+    const name = prompt('文件夹名称：', '新文件夹');
+    if (!name || !name.trim()) return;
+    const node = await GG.api.bookmarks.create({ parentId, title: name.trim() });
+    collapse.delete(node.id);
+    refresh();
   }
 
   function openFolderMenu(anchor, node) {
@@ -566,8 +552,8 @@
     menu.classList.add('open');
     const items = [
       { label: '在面板中打开', ic: 'folder', fn: () => { if (activePanel()) setPanelFolder(activePanelId, node.id); else addPanel(node.id); } },
-      { label: '新建并列面板', ic: 'folderPlus', fn: () => addPanel(node.id) },
-      { label: '在此新建文件夹', ic: 'folderPlus', fn: () => newFolder(node.id) },
+      { label: '新建并列面板', ic: 'panelSide', fn: () => addPanel(node.id) },
+      { label: '在此新建文件夹', ic: 'folder', fn: () => newFolder(node.id) },
       { label: '重命名', ic: 'settings', fn: () => renameFolder(node) },
       { label: '删除文件夹', ic: 'trash', fn: () => deleteFolder(node), danger: true }
     ];
@@ -584,7 +570,7 @@
     menu.style.top = (rect.bottom + 6) + 'px';
     closeMenuOnOutside(menu);
   }
-  function renameFolder(node) { openRename(node); }
+  function renameFolder(node) { promptRename(node); }
 
   function openCtxMenu(x, y, items) {
     const menu = $('#ctxMenu');
@@ -611,20 +597,42 @@
     setTimeout(() => document.addEventListener('click', ctxMenuCleanup), 0);
   }
 
-  async function promptRename(node) {
-    const name = prompt('名称：', node.title || '');
-    if (!name || !name.trim() || name.trim() === node.title) return;
-    try { await GG.api.bookmarks.update(node.id, { title: name.trim() }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已重命名', 'success'); refresh(); }
-    catch (e) { GG.toast.show('重命名失败', 'error'); }
+  // 重命名文件夹（浮动窗口，仅编辑名称）
+  function promptRename(node) {
+    if (!GG.bookmarkEditor) return;
+    GG.bookmarkEditor.open({
+      titleOnly: true,
+      title: node.title,
+      onSave: async (data) => {
+        const t = (data && data.title || '').trim();
+        if (!t || t === node.title) return;
+        try { await GG.api.bookmarks.update(node.id, { title: t }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已重命名', 'success'); refresh(); }
+        catch (e) { GG.toast.show('重命名失败', 'error'); }
+      }
+    });
   }
 
-  async function editBookmarkUrl(node) {
-    const url = prompt('链接地址：', node.url || '');
-    if (!url || !url.trim()) return;
-    const trimmed = url.trim();
-    if (trimmed === node.url) return;
-    try { await GG.api.bookmarks.update(node.id, { url: trimmed }); pushHistory({ type: 'rename', id: node.id, was: node.title }); GG.toast.show('已更新链接', 'success'); refresh(); }
-    catch (e) { GG.toast.show('更新链接失败', 'error'); }
+  // 编辑书签（名称/链接），复用浮动窗口
+  function editBookmark(node) {
+    if (!GG.bookmarkEditor) return;
+    GG.bookmarkEditor.open({
+      title: node.title,
+      url: node.url,
+      onSave: async (data) => {
+        const changes = {};
+        if (data.title && data.title !== node.title) changes.title = data.title;
+        if (data.url && data.url !== node.url) changes.url = data.url;
+        if (!Object.keys(changes).length) return;
+        try {
+          await GG.api.bookmarks.update(node.id, changes);
+          pushHistory({ type: 'rename', id: node.id, was: node.title });
+          GG.toast.show('已更新书签', 'success');
+          refresh();
+        } catch (e) {
+          GG.toast.show('更新书签失败', 'error');
+        }
+      }
+    });
   }
 
   async function deleteItem(node) {
@@ -691,7 +699,7 @@
     $('#btnUndo').addEventListener('click', undo);
     $('#btnDelete').addEventListener('click', deleteSelected);
     $('#btnHome').addEventListener('click', () => GG.api.tabs.update({ url: GG.api.runtime.getURL('pages/newtab/newtab.html') }));
-    $('#btnNewFolder').innerHTML = GG.icon('folderPlus');
+    $('#btnNewFolder').innerHTML = GG.icon('folder');
     $('#btnNewFolder').addEventListener('click', () => newFolder(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
     $('#btnCollapseAll').innerHTML = GG.icon('foldUp');
     $('#btnCollapseAll').addEventListener('click', collapseAll);
