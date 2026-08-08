@@ -327,6 +327,15 @@
   function wirePinbar() {
     const addBtn = $('#pinbarAdd');
     if (addBtn) addBtn.addEventListener('click', () => openPinAddPicker());
+    const clearBtn = $('#pinbarClear');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      if (!state.pinned.length) return;
+      if (!confirm('确定清除所有置顶项？')) return;
+      state.pinned = [];
+      persist();
+      renderPinbar();
+      GG.toast.show('已清除所有置顶', 'success');
+    });
   }
   // 从书签选择置顶项（+ 按钮）：引导输入网址，或提示右键书签项置顶
   async function openPinAddPicker() {

@@ -48,13 +48,16 @@
   </header>
 
   <!-- 置顶快速访问栏 -->
-  <div class="pinbar" id="pinbar">
-    <div class="pinbar-label" data-tip="置顶快速访问">置顶</div>
-    <div class="pinbar-items" id="pinbarItems"></div>
-    <button class="pinbar-add" id="pinbarAdd" data-tip="添加置顶">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-    </button>
-  </div>
+    <div class="pinbar" id="pinbar">
+
+      <div class="pinbar-items" id="pinbarItems"></div>
+      <button class="pinbar-clear" id="pinbarClear" data-tip="清除所有置顶">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+      </button>
+      <button class="pinbar-add" id="pinbarAdd" data-tip="添加置顶">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
 
   <!-- 横向滚动指示器：置顶栏下方、卡片上方 -->
   <div class="hscroll" id="hscroll">

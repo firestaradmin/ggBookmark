@@ -139,6 +139,19 @@ body {
 }
 .pinbar-add:hover { color: var(--text); background: var(--glass-strong); border-color: rgba(255,255,255,.3); }
 .pinbar-add svg { width: 16px; height: 16px; }
+.pinbar-clear {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all .15s ease;
+}
+.pinbar-clear:hover { color: #ff7a7a; background: rgba(255,80,80,.12); border-color: rgba(255,80,80,.4); }
+.pinbar-clear svg { width: 15px; height: 15px; }
 /* 空置顶栏时不显示整行 */
 .pinbar.empty { display: none; }
 
