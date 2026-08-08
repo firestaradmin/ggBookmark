@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GG Bookmark - 使用说明</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <div class="gg-bg" data-style="default"></div>
+
+  <header class="help-top">
+    <div class="help-brand">
+      <img src="../../icons/GGBookmark48.png" alt="logo" class="help-logo">
+      <div>
+        <h1>GG Bookmark 使用说明</h1>
+        <p>平铺卡片式书签起始页 · 书签整理 · 配置同步</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="help-wrap">
+    <nav class="toc">
+      <h3>目录</h3>
+      <a href="#start">一、起始页概览</a>
+      <a href="#card">二、卡片操作</a>
+      <a href="#cardmenu">三、卡片菜单</a>
+      <a href="#view">四、紧凑模式与卡片高度</a>
+      <a href="#cat">五、分类</a>
+      <a href="#organizer">六、整理书签</a>
+      <a href="#settings">七、设置</a>
+      <a href="#data">八、数据导入 / 导出 / 同步</a>
+      <a href="#tips">九、常用技巧</a>
+    </nav>
+
+    <section class="help-body">
+      <section class="group" id="start">
+        <h2>一、起始页概览</h2>
+        <p>新标签页被替换为 GG Bookmark 起始页，整体布局：</p>
+        <ul>
+          <li><strong>顶部左侧</strong>：分类标签（导航精品 / 投资 / 系统…），可自定义。</li>
+          <li><strong>顶部中央</strong>：搜索框，点击左侧图标可切换搜索引擎，回车搜索。</li>
+          <li><strong>顶部右侧</strong>：显示设置、整理书签、设置、帮助、卡片添加。</li>
+          <li><strong>主体</strong>：按分类以网格卡片展示书签，卡片可多列、可拖动调整。</li>
+        </ul>
+        <p class="hint">首次使用没有任何卡片，点击右上角「卡片添加」，或在空白处右键 → 新建卡片，选择一个书签文件夹即可生成。</p>
+      </section>
+
+      <section class="group" id="card">
+        <h2>二、卡片操作</h2>
+        <ul>
+          <li><strong>拖动调整顺序</strong>：按住卡片顶部的圆点手柄拖动，可调整卡片在列内的上下顺序，也可拖到其它列。</li>
+          <li><strong>调整卡片高度</strong>：拖动卡片底部横条可上下调整该卡片的高度。</li>
+          <li><strong>列宽</strong>：所有卡片列宽在「设置 → 卡片列宽」统一调整。</li>
+          <li><strong>点击书签</strong>：在新标签页打开该网站。</li>
+          <li><strong>拖动书签</strong>：卡片内拖动可排序；拖到另一张卡片可把书签移动到那个文件夹。</li>
+          <li><strong>右键书签</strong>：打开 / 复制链接 / 移出卡片 / 删除书签。</li>
+        </ul>
+      </section>
+
+      <section class="group" id="cardmenu">
+        <h2>三、卡片菜单</h2>
+        <p>点击每张卡片右上角的设置按钮，可对单张卡片操作：</p>
+        <ul>
+          <li><strong>重新选择文件夹</strong>：更换卡片绑定的书签文件夹。</li>
+          <li><strong>包含子文件夹</strong>：开关，开启后连同子文件夹里的书签一起显示。</li>
+          <li><strong>自适应高度 / 固定高度</strong>：单张卡片的展开方式。</li>
+          <li><strong>紧凑模式</strong>：自动 / 开启 / 关闭。</li>
+          <li><strong>重命名</strong>：修改卡片标题（同时会重命名原书签文件夹）。</li>
+          <li><strong>删除卡片</strong>：仅移除卡片，不删除书签。</li>
+        </ul>
+      </section>
+
+      <section class="group" id="view">
+        <h2>四、紧凑模式与卡片高度</h2>
+        <ul>
+          <li><strong>紧凑模式</strong>：当卡片高度较小时，书签项自动把「标题 + 域名」合并到一行、图标变小，节省空间。</li>
+          <li><strong>全局设置</strong>：点击顶部「显示设置」按钮，可一次性对所有卡片设置紧凑模式（自动 / 固定开启 / 固定关闭）和卡片高度（自适应 / 固定）。</li>
+          <li><strong>单卡覆盖</strong>：每张卡片右上角也有独立的紧凑 / 自适应切换，可单独覆盖全局设置。</li>
+        </ul>
+      </section>
+
+      <section class="group" id="cat">
+        <h2>五、分类</h2>
+        <ul>
+          <li><strong>切换分类</strong>：点击顶部标签。</li>
+          <li><strong>新建分类</strong>：点击分类栏最右侧的「＋」。</li>
+          <li><strong>重命名 / 删除</strong>：右键分类标签。</li>
+          <li>每个分类拥有独立的卡片布局与顺序。</li>
+        </ul>
+      </section>
+
+      <section class="group" id="organizer">
+        <h2>六、整理书签</h2>
+        <p>点击顶部「整理书签」按钮进入，是一个分栏式的书签管理器：</p>
+        <ul>
+          <li><strong>左侧</strong>：文件夹树。</li>
+          <li><strong>右侧</strong>：文件夹内容面板，可打开多个面板并排对比。</li>
+          <li><strong>多选</strong>：Ctrl / ⌘ 单击，或 Shift 范围选择。</li>
+          <li><strong>移动 / 排序</strong>：拖动选中项到其它文件夹移动；同文件夹内拖动排序。</li>
+          <li><strong>操作</strong>：新建文件夹、重命名、删除、移动，均支持撤销（Ctrl / ⌘ + Z 或顶部按钮）。</li>
+        </ul>
+      </section>
+
+      <section class="group" id="settings">
+        <h2>七、设置</h2>
+        <p>点击顶部「设置」按钮打开右侧设置面板：</p>
+        <ul>
+          <li><strong>背景</strong>：渐变 / 深色渐变 / 预设壁纸 / 自定义图片，可调模糊与遮罩透明度。</li>
+          <li><strong>搜索</strong>：默认搜索引擎。</li>
+          <li><strong>外观</strong>：主题（黑暗 / 明亮）、主题色、卡片列宽、字体大小、书签图标来源、是否显示域名。</li>
+          <li><strong>书签图标来源</strong>：FaviconSnap / DuckDuckGo / Google / 本地首字母；图标获取成功后自动缓存，超时则显示首字母。</li>
+        </ul>
+      </section>
+
+      <section class="group" id="data">
+        <h2>八、数据导入 / 导出 / 同步</h2>
+        <ul>
+          <li><strong>导出配置</strong>：把设置、卡片布局连同书签导出为 JSON 文件备份。</li>
+          <li><strong>导入配置</strong>：从 JSON 恢复（书签会重建，建议先备份）。</li>
+          <li><strong>清除配置</strong>：恢复默认并删除本地配置（不会删除浏览器书签）。</li>
+          <li><strong>同步</strong>：支持 WebDAV 服务器同步，可手动上传 / 下载，或按间隔、设置变更、书签变更自动触发。</li>
+        </ul>
+      </section>
+
+      <section class="group" id="tips">
+        <h2>九、常用技巧</h2>
+        <ul>
+          <li>拖动卡片到列的空位再松开，即可快速换列。</li>
+          <li>紧凑模式下卡片能装下更多书签，适合窄屏。</li>
+          <li>「自动适应」按钮让卡片按子项数量自动展开全部内容。</li>
+          <li>右键空白处可直接在当前列新建卡片。</li>
+        </ul>
+      </section>
+    </section>
+  </main>
+
+  <footer class="help-footer">@firestaradmin</footer>
+
+  <script src="../../lib/browser.js"></script>
+  <script src="../../lib/store.js"></script>
+</body>
+</html>

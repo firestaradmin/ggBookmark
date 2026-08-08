@@ -445,6 +445,23 @@
       colEls[colIdx].appendChild(fill);
     });
     if (cards.length) grid.dataset.empty = 'false'; else grid.dataset.empty = 'true';
+    // 空状态时重建居中浮动的引导提示（grid.innerHTML='' 会清掉静态的 .grid-empty）
+    if (!cards.length) {
+      const empty = document.createElement('div');
+      empty.className = 'grid-empty';
+      const btn = document.createElement('button');
+      btn.className = 'empty-add-btn';
+      btn.innerHTML = GG.icon('addCard');
+      btn.title = '创建新卡片';
+      btn.addEventListener('click', () => createBlankCard());
+      const p = document.createElement('p');
+      p.textContent = '还没有卡片';
+      const sub = document.createElement('p');
+      sub.className = 'sub';
+      sub.innerHTML = '在空白处<strong>右键</strong>，或点击右上角<strong>“卡片添加”</strong>，选择一个书签文件夹来生成卡片。';
+      empty.append(btn, p, sub);
+      grid.appendChild(empty);
+    }
     // persist normalized col assignments asynchronously (avoid feedback loop)
     if (dirty) persist();
   }
@@ -1245,7 +1262,6 @@
 
   // ---------- Buttons ----------
   function wireButtons() {
-    $('#btnUndo').innerHTML = GG.icon('undo');
     // 主题模式切换
     document.querySelectorAll('.theme-btn').forEach((b) => {
       b.addEventListener('click', () => {
@@ -1268,6 +1284,11 @@
       const panel = document.getElementById('ntSettings');
       if (panel) panel.classList.remove('open');
     });
+    const btnHelp = $('#btnHelp');
+    if (btnHelp) {
+      btnHelp.innerHTML = GG.icon('help');
+      btnHelp.addEventListener('click', () => GG.api.tabs.create({ url: GG.api.runtime.getURL('pages/help/help.html') }));
+    }
     const btnOrg = $('#btnOrganize');
     btnOrg.innerHTML = GG.icon('bookmark');
     btnOrg.addEventListener('click', () => GG.api.tabs.create({ url: GG.api.runtime.getURL('pages/organizer/organizer.html') }));
@@ -1307,7 +1328,8 @@
   }
 
   function render(countHas) {
-    $('#btnUndo').disabled = state.history.length === 0;
+    const btn = $('#btnUndo');
+    if (btn) btn.disabled = state.history.length === 0;
   }
   // ---------- Master render ----------
   function renderAll() {
