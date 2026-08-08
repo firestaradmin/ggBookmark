@@ -11,6 +11,7 @@
 
   const DEFAULT_ROOT = 'root________';
   let orgSettings = {};
+  let orgColumns = 1;   // 面板书签列数
 
   let tree = [];
   let folderCount = {};
@@ -275,6 +276,8 @@
     const children = await getChildren(p.folderId);
     if (p.head) { const t = p.head.querySelector('.ph-title'); if (t) t.textContent = folderTitle(p.folderId); }
     grid.innerHTML = '';
+    // 应用列数
+    grid.dataset.cols = orgColumns;
     if (!children.length) {
       const e = document.createElement('div');
       e.className = 'panel-empty-hint';
@@ -317,6 +320,14 @@
 
     item.addEventListener('click', (e) => {
       activePanelId = p.id; markActivePanel();
+      const onCheck = e.target.closest('.item-check');
+      if (onCheck) {
+        // 点击复选框：切换选中（不清除其它选中项，便于多选）
+        toggleSelect(p, node.id, item);
+        p.lastClicked = node.id;
+        updateToolbar();
+        return;
+      }
       if (e.ctrlKey || e.metaKey) {
         toggleSelect(p, node.id, item);
       } else if (e.shiftKey && p.lastClicked) {
@@ -345,20 +356,26 @@
         openCtxMenu(e.clientX, e.clientY, [
           { label: '打开链接', ic: 'external', fn: () => GG.api.tabs.create({ url: node.url }) },
           { label: '编辑书签', ic: 'settings', fn: () => editBookmark(node) },
-          { label: '删除书签', ic: 'trash', fn: () => deleteItem(node), danger: true }
+          { label: '删除书签', ic: 'trash', fn: () => deleteSelected(), danger: true }
         ]);
       } else {
         openCtxMenu(e.clientX, e.clientY, [
           { label: '在此面板打开', ic: 'folder', fn: () => setPanelFolder(p.id, node.id) },
           { label: '重命名', ic: 'settings', fn: () => promptRename(node) },
-          { label: '删除文件夹', ic: 'trash', fn: () => deleteItem(node), danger: true }
+          { label: '删除文件夹', ic: 'trash', fn: () => deleteSelected(), danger: true }
         ]);
       }
     });
 
     item.setAttribute('draggable', 'true');
     item.addEventListener('dragstart', (e) => {
-      if (!p.selection.has(node.id)) { p.selection.clear(); p.selection.add(node.id); renderPanel(p); updateToolbar(); }
+      // 未选中则仅把当前项加入选择，避免重渲染破坏拖拽
+      if (!p.selection.has(node.id)) {
+        p.selection.clear();
+        p.selection.add(node.id);
+        item.classList.add('selected');
+        updateToolbar();
+      }
       sel.dragIds = Array.from(p.selection);
       sel.dragFromFolder = p.folderId;
       e.dataTransfer.setData('text/plain', node.type === 'bookmark' ? node.url : '');
@@ -373,18 +390,39 @@
     });
     item.addEventListener('dragover', (e) => {
       e.preventDefault();
-      if (sel.dragFromFolder === p.folderId && sel.dragIds.length && !sel.dragIds.includes(node.id)) {
-        const r = item.getBoundingClientRect();
-        const before = e.clientY < r.top + r.height / 2;
+      item.classList.remove('drop-before', 'drop-after', 'drop-into');
+      if (!sel.dragIds.length || sel.dragIds.includes(node.id)) return;
+      const r = item.getBoundingClientRect();
+      const frac = (e.clientY - r.top) / Math.max(1, r.height);
+      // 中部区域：文件夹项 -> 移入；上下边缘区域 -> 排序
+      const middle = frac >= 0.35 && frac <= 0.65;
+      if (node.type === 'folder' && middle) {
+        item.classList.add('drop-into');
+      } else {
+        const before = frac < 0.5;
         item.classList.toggle('drop-before', before);
         item.classList.toggle('drop-after', !before);
       }
     });
-    item.addEventListener('dragleave', () => item.classList.remove('drop-before', 'drop-after'));
+    item.addEventListener('dragleave', () => item.classList.remove('drop-before', 'drop-after', 'drop-into'));
     item.addEventListener('drop', (e) => {
       e.preventDefault(); e.stopPropagation();
-      item.classList.remove('drop-before', 'drop-after');
-      if (sel.dragFromFolder === p.folderId && sel.dragIds.length) reorderWithin(p, node, e.clientY);
+      item.classList.remove('drop-before', 'drop-after', 'drop-into');
+      console.log('[gg-drop] 触发 drop', { dragIds: sel.dragIds, from: sel.dragFromFolder, toFolder: p.folderId, target: node.title, targetType: node.type });
+      if (!sel.dragIds.length) return;
+      const r = item.getBoundingClientRect();
+      const frac = (e.clientY - r.top) / Math.max(1, r.height);
+      const middle = frac >= 0.35 && frac <= 0.65;
+      if (node.type === 'folder' && middle) {
+        // 拖到文件夹中部：移动进入该文件夹
+        moveIdsTo(sel.dragIds, node.id);
+      } else if (sel.dragFromFolder === p.folderId) {
+        // 同文件夹：在目标项前后排序（含文件夹项边缘 = 间隔排序）
+        reorderWithin(p, item, e.clientY);
+      } else if (sel.dragFromFolder) {
+        // 跨文件夹：移动到当前面板文件夹
+        moveIdsTo(sel.dragIds, p.folderId);
+      }
     });
     return item;
   }
@@ -435,7 +473,8 @@
   // === REORDER / MOVE / DELETE ===
   async function reorderWithin(p, refItem, clientY) {
     const folderId = p.folderId;
-    if (!refItem || refItem.dataset.type === 'folder') return;
+    console.log('[gg-reorder] 进入', { refType: refItem && refItem.dataset && refItem.dataset.type, refId: refItem && refItem.dataset && refItem.dataset.id, folderId });
+    if (!refItem) return;
     const rect = refItem.getBoundingClientRect();
     const insertBefore = clientY < rect.top + rect.height / 2;
     const ids = Array.from(sel.dragIds);
@@ -445,6 +484,7 @@
     const prevOrder = order.slice();
     const rest = order.filter((id) => !ids.includes(id));
     let targetIndex = rest.indexOf(refItem.dataset.id);
+    console.log('[gg-reorder] 计算', { order, rest, targetId: refItem.dataset.id, targetIndex });
     if (targetIndex === -1) return;
     if (!insertBefore) targetIndex += 1;
     const beforeId = rest[targetIndex] !== undefined ? rest[targetIndex] : undefined;
@@ -456,6 +496,7 @@
     if (beforeId === undefined) finalOrder.push(...ids);
     const seen = new Set();
     const clean = finalOrder.filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
+    console.log('[gg-reorder] order=', order, 'ids=', ids, 'rest=', rest, 'targetIdx=', targetIndex, 'clean=', clean, 'prevOrder=', prevOrder);
     if (JSON.stringify(clean) === JSON.stringify(prevOrder)) return;
     for (let i = 0; i < clean.length; i++) await GG.api.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {});
     pushHistory({ type: 'reorder', folderId, prev: prevOrder, target: clean });
@@ -713,9 +754,37 @@
     });
   }
 
+  // 面板书签列数切换
+  function applyColToggleUI() {
+    document.querySelectorAll('.col-btn').forEach((b) => {
+      b.classList.toggle('active', Number(b.dataset.col) === orgColumns);
+    });
+  }
+  function wireColToggle() {
+    const wrap = document.getElementById('colToggle');
+    if (!wrap) return;
+    wrap.addEventListener('click', (e) => {
+      const btn = e.target.closest('.col-btn');
+      if (!btn) return;
+      const col = Number(btn.dataset.col) || 1;
+      if (col === orgColumns) return;
+      orgColumns = col;
+      GG.api.storage.set({ orgColumns: col });
+      applyColToggleUI();
+      renderPanels();
+    });
+  }
+
   async function init() {
     wireButtons();
     orgSettings = await GG.loadSettings();
+    // 读取面板列数
+    try {
+      const d = await GG.api.storage.get('orgColumns');
+      orgColumns = (d && d.orgColumns) || 1;
+    } catch (e) { orgColumns = 1; }
+    wireColToggle();
+    applyColToggleUI();
     await loadTree();
     let first = null, second = null;
     walkFolders(tree, (fnode) => { if (!first) first = fnode.id; else if (!second) second = fnode.id; });
