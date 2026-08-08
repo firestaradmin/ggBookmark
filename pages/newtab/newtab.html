@@ -56,6 +56,11 @@
     </button>
   </div>
 
+  <!-- 横向滚动指示器：置顶栏下方、卡片上方 -->
+  <div class="hscroll" id="hscroll">
+    <div class="hscroll-bar" id="hscrollBar"></div>
+  </div>
+
   <!-- Scroll wrapper: real scroll container so custom scrollbars apply on
        both Firefox and Chrome/Windows (root scroller ignores them). -->
   <div class="scroll" id="scroll">
@@ -180,10 +185,23 @@
             <div class="colors" id="colors"></div>
           </div>
           <div class="field">
-            <span class="f-title">卡片列宽</span>
-            <input id="cardWidth" type="range" min="240" max="640" step="20">
-            <span class="range-val" id="cardWidthVal">320px</span>
+            <span class="f-title">卡片列数</span>
+            <select id="cardCols">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+            <span class="range-val" id="cardColsVal">3 列</span>
           </div>
+          <div class="field">
+            <span class="f-title">卡片最小宽度</span>
+            <input id="cardMinWidth" type="range" min="160" max="640" step="10">
+            <span class="range-val" id="cardMinWidthVal">320px</span>
+          </div>
+          <div class="hint">固定列数不随窗口宽度变化；当窗口放不下时出现横向滚动条。</div>
           <div class="field">
             <span class="f-title">背景颜色</span>
             <input id="glassColor" type="color" value="#ffffff">

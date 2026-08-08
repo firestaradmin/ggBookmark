@@ -15,8 +15,8 @@
   };
 
   let cardOrder = [];     // persisted order of {appId} among current category
-  let colWidth = 320;     // global card column width (px), set in settings
   let suppressCardRender = false; // 拖拽高度等局部操作时，避免 onChanged 触发全量重渲染
+  let lastCols = null;    // 上一次渲染时的列数，用于列数变化时的比例映射
 
   // ---------- DOM ----------
   const $ = (s) => document.querySelector(s);
@@ -38,7 +38,6 @@
     state.pinned = Array.isArray(data.pinned) ? data.pinned : [];
     const byCat = data.orderByCat || {};
     cardOrder = byCat[state.activeCategory] || [];
-    colWidth = state.settings.cardWidth || 320;
   }
 
   async function persist() {
@@ -86,6 +85,7 @@
       b.classList.toggle('active', (b.dataset.theme === (s.theme || 'dark')));
     });
     applyGlass();
+    applyCardCols();
   }
 
   // 应用磨砂玻璃设置（顶部工具栏/卡片/置顶行的模糊度、背景颜色与透明度）
@@ -103,6 +103,61 @@
     }
     document.documentElement.style.setProperty('--glass-blur', blur + 'px');
     document.documentElement.style.setProperty('--panel-bg', `rgba(${r}, ${g}, ${b}, ${op})`);
+  }
+
+  // 应用固定卡片列数与最小宽度（CSS 变量，供 .grid 使用）
+  function applyCardCols() {
+    const s = state.settings;
+    const cols = Math.max(1, Math.min(Number(s.cardCols) || 3, 8));
+    const minW = Math.max(160, Number(s.cardMinWidth) || 320);
+    document.documentElement.style.setProperty('--card-cols', String(cols));
+    document.documentElement.style.setProperty('--card-min-width', minW + 'px');
+  }
+
+  // 更新横向滚动指示器：仅当 .scroll 可横向滚动时显示，并同步 bar 位置
+  const hscroll = document.getElementById('hscroll');
+  const hscrollBar = document.getElementById('hscrollBar');
+  function updateHScroll() {
+    if (!hscroll || !hscrollBar) return;
+    const sc = document.getElementById('scroll');
+    if (!sc) return;
+    const maxScroll = sc.scrollWidth - sc.clientWidth;
+    const canScroll = maxScroll > 1;
+    console.log('[gg-hscroll]', { scrollW: sc.scrollWidth, clientW: sc.clientWidth, maxScroll, canScroll });
+    hscroll.classList.toggle('visible', canScroll);
+    if (!canScroll) return;
+    const barW = Math.max(30, sc.clientWidth / sc.scrollWidth * 100);
+    hscrollBar.style.width = barW + '%';
+    const ratio = maxScroll > 0 ? sc.scrollLeft / maxScroll : 0;
+    const trackW = hscroll.clientWidth - hscrollBar.offsetWidth;
+    hscrollBar.style.left = Math.max(0, trackW * ratio) + 'px';
+  }
+  // 点击/拖动指示器定位：bar 中心跟随鼠标，内容滚动到对应比例
+  function wireHScroll() {
+    if (!hscroll) return;
+    const sc = document.getElementById('scroll');
+    let dragging = false;
+    let grabOffset = 0; // 按下时鼠标相对 bar 左边缘的偏移
+    const scrollFromMouse = (clientX) => {
+      const rect = hscroll.getBoundingClientRect();
+      const trackW = hscroll.clientWidth - hscrollBar.offsetWidth;
+      let x = clientX - rect.left - grabOffset;
+      x = Math.max(0, Math.min(x, trackW));
+      const frac = trackW > 0 ? x / trackW : 0;
+      sc.scrollLeft = frac * (sc.scrollWidth - sc.clientWidth);
+    };
+    hscroll.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const rect = hscroll.getBoundingClientRect();
+      grabOffset = e.clientX - rect.left - hscrollBar.offsetLeft;
+      dragging = true;
+      scrollFromMouse(e.clientX);
+    });
+    document.addEventListener('mousemove', (e) => { if (dragging) scrollFromMouse(e.clientX); });
+    document.addEventListener('mouseup', () => { dragging = false; });
+    document.getElementById('scroll').addEventListener('scroll', updateHScroll, true);
+    window.addEventListener('resize', updateHScroll);
+    setTimeout(updateHScroll, 300); // 布局稳定后再检查一次
   }
 
   // 根据同步模式触发上传（由设置/书签变更事件调用）
@@ -608,6 +663,26 @@
   }
 
   // ---------- Card rendering ----------
+  // 列数变化时调整卡片列位置：
+  //  - 列数变多（如 3->5）：保持原列索引，新增列排在末尾留空。
+  //  - 列数变少（如 5->3）：超出范围的卡片按比例映射到有效列，避免挤到同一列。
+  function remapCols(cards, oldCols, newCols) {
+    cards.forEach((app) => {
+      if (typeof app.col !== 'number') return;
+      if (newCols > oldCols) {
+        // 列数变多：原列保留（col < oldCols 均有效），不做映射
+        return;
+      }
+      // 列数变少：超范围卡片按比例映射
+      let nc;
+      if (oldCols <= 1) {
+        nc = 0;
+      } else {
+        nc = Math.round(app.col * (newCols - 1) / (oldCols - 1));
+      }
+      app.col = Math.max(0, Math.min(nc, newCols - 1));
+    });
+  }
   // Each app may carry an explicit `col` (column index) so the user can freely
   // place cards into any column. When the column count changes or `col` is
   // missing/out-of-range, we re-balance by keeping existing assignments and
@@ -645,6 +720,11 @@
     grid.innerHTML = '';
     const tpl = $('#cardTpl');
     const cols = computedColumnCount();
+    // 列数变化时，按比例重映射卡片列位置，避免卡片被重新分配到同一列导致布局大变
+    if (lastCols !== null && lastCols !== cols && cols > 0) {
+      remapCols(cards, lastCols, cols);
+    }
+    lastCols = cols;
     const { buckets, dirty } = assignColumns(cards, cols);
     // build column wrappers
     const colEls = [];
@@ -685,6 +765,8 @@
       empty.append(btn, p, sub);
       grid.appendChild(empty);
     }
+    updateHScroll();
+    console.log('[gg-grid]', { cols, clientW: grid.clientWidth, scrollW: grid.scrollWidth, minW: document.documentElement.style.getPropertyValue('--card-min-width'), cardCols: document.documentElement.style.getPropertyValue('--card-cols') });
     // persist normalized col assignments asynchronously (avoid feedback loop)
     if (dirty) persist();
   }
@@ -880,12 +962,12 @@
     });
   }
 
-  // Number of columns based on the global column width setting
+  // Number of columns (fixed, from settings / live CSS var)
   function computedColumnCount() {
-    const gap = 18;
-    const w = grid.clientWidth || document.body.clientWidth || 900;
-    const cw = colWidth || 320;
-    return Math.max(1, Math.min(Math.floor((w + gap) / (cw + gap)), 6));
+    // 优先读实时 CSS 变量（设置面板预览会更新它），保证与 grid 实际列数一致
+    let c = document.documentElement.style.getPropertyValue('--card-cols');
+    if (!c) c = state.settings.cardCols;
+    return Math.max(1, Math.min(Number(c) || 3, 8));
   }
 
   // Set every card to auto-fit (height expands to show all children).
@@ -1663,6 +1745,7 @@
     wireButtons();
     wireImportFolder();
     wirePinbar();
+    wireHScroll();
     if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
     enableGridDrag();
     enableColumnDrop();
@@ -1697,16 +1780,17 @@
       if (area !== 'local') return;
       const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat'].some((k) => k in changes);
       if (changes.settings) {
-        const prevWidth = colWidth;
+        const prevCols = state.settings.cardCols;
+        const prevMinW = state.settings.cardMinWidth;
         const prevFavicon = state.settings && state.settings.faviconSource;
         state.settings = Object.assign({}, GG.DEFAULTS, changes.settings.newValue || {});
         window.__ggSettings = state.settings;
-        colWidth = state.settings.cardWidth || 320;
         applyBg();
         renderSearchEngine();
         syncViewBtn();
         syncViewMenu();
-        if (prevWidth !== colWidth) renderCards();  // rebalance columns
+        applyCardCols(); // 应用固定列数与最小宽度
+        if (prevCols !== state.settings.cardCols || prevMinW !== state.settings.cardMinWidth) renderCards();
         else if (prevFavicon !== state.settings.faviconSource) renderCards(); // 图标来源变化需重绘
         else renderCards(); // refresh compact state from global setting
         maybeSync('settingsChange');

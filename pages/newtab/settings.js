@@ -58,7 +58,12 @@
     }
   }
   function applyCardWidthPreview() {
-    $('#cardWidthVal').textContent = $('#cardWidth').value + 'px';
+    const cols = Number($('#cardCols').value) || 3;
+    const minW = Number($('#cardMinWidth').value) || 320;
+    $('#cardColsVal').textContent = cols + ' 列';
+    $('#cardMinWidthVal').textContent = minW + 'px';
+    document.documentElement.style.setProperty('--card-cols', String(cols));
+    document.documentElement.style.setProperty('--card-min-width', minW + 'px');
   }
   // 磨砂玻璃滑块实时预览：更新显示值并写入 CSS 变量（即时生效）
   function applyGlassPreview() {
@@ -361,7 +366,8 @@
     $('#bgUrl').value = settings.backgroundImage || '';
     $('#bgBlur').value = settings.backgroundBlur ?? 0;
     $('#bgDim').value = settings.backgroundDim ?? 0.15;
-    $('#cardWidth').value = settings.cardWidth || 320;
+    $('#cardCols').value = settings.cardCols || 3;
+    $('#cardMinWidth').value = settings.cardMinWidth || 320;
     $('#glassColor').value = settings.glassColor || '#ffffff';
     $('#glassBlur').value = settings.glassBlur ?? 20;
     $('#glassOpacity').value = settings.glassOpacity ?? 0.06;
@@ -562,7 +568,8 @@
         GG.toast.show('已记住书签导入文件夹', 'success');
       });
     }
-    $('#cardWidth').addEventListener('input', applyCardWidthPreview);
+    $('#cardCols').addEventListener('change', applyCardWidthPreview);
+    $('#cardMinWidth').addEventListener('input', applyCardWidthPreview);
     $('#glassColor').addEventListener('input', applyGlassPreview);
     $('#glassBlur').addEventListener('input', applyGlassPreview);
     $('#glassOpacity').addEventListener('input', applyGlassPreview);
@@ -577,7 +584,8 @@
       settings.backgroundImage = $('#bgUrl').value.trim() || '';
       settings.backgroundBlur = Number($('#bgBlur').value) || 0;
       settings.backgroundDim = Number($('#bgDim').value) || 0;
-      settings.cardWidth = Number($('#cardWidth').value) || 320;
+      settings.cardCols = Number($('#cardCols').value) || 3;
+      settings.cardMinWidth = Number($('#cardMinWidth').value) || 320;
       settings.glassColor = $('#glassColor').value || '#0c1220';
       settings.glassBlur = Number($('#glassBlur').value) || 0;
       settings.glassOpacity = Number($('#glassOpacity').value);
