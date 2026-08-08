@@ -360,6 +360,7 @@
     markActivePreset();
     toggleBgFields();
     loadSync();
+    renderSyncLogs();
   }
   function loadSync() {
     const sync = Object.assign({}, GG.DEFAULTS.sync, settings.sync || {});
@@ -375,6 +376,32 @@
     if ($('#syncInterval')) $('#syncInterval').value = sync.intervalMinutes || 30;
     const iv = document.getElementById('syncIntervalField');
     if (iv) iv.style.display = triggers.includes('interval') ? '' : 'none';
+  }
+  // 渲染同步日志面板
+  async function renderSyncLogs() {
+    const box = document.getElementById('syncLogs');
+    if (!box) return;
+    if (!GG.Sync || !GG.Sync.getLogs) return;
+    const logs = await GG.Sync.getLogs();
+    if (!logs.length) {
+      box.innerHTML = '<div class="sync-log-empty">暂无同步日志</div>';
+      return;
+    }
+    const actionLabel = { upload: '上传', download: '下载', test: '连接', other: '同步' };
+    box.innerHTML = logs.map((l) => {
+      const d = new Date(l.time);
+      const time = d.toLocaleString();
+      const act = actionLabel[l.action] || '同步';
+      const cls = l.ok ? 'ok' : 'err';
+      return `<div class="sync-log-item ${cls}">
+        <span class="sync-log-time">${time}</span>
+        <span class="sync-log-action">${act}</span>
+        <span class="sync-log-msg">${escapeHtml(l.msg || '')}</span>
+      </div>`;
+    }).join('');
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
   function readSync() {
     const triggers = [];
@@ -662,9 +689,13 @@
       $('#btnSyncUpload').addEventListener('click', async () => {
         try {
           await GG.Sync.upload();
+          if (GG.Sync.log) GG.Sync.log('上传成功', true, 'upload').catch(() => {});
           GG.toast.show('已上传到服务器', 'success');
+          renderSyncLogs();
         } catch (e) {
+          if (GG.Sync.log) GG.Sync.log('上传失败：' + (e && e.message ? e.message : '未知错误'), false, 'upload').catch(() => {});
           GG.toast.show('上传失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+          renderSyncLogs();
         }
       });
     }
@@ -672,10 +703,14 @@
       $('#btnSyncDownload').addEventListener('click', async () => {
         try {
           await GG.Sync.download();
+          if (GG.Sync.log) GG.Sync.log('下载并应用成功', true, 'download').catch(() => {});
           GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
           GG.toast.show('已从服务器下载并应用', 'success');
+          renderSyncLogs();
         } catch (e) {
+          if (GG.Sync.log) GG.Sync.log('下载失败：' + (e && e.message ? e.message : '未知错误'), false, 'download').catch(() => {});
           GG.toast.show('下载失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+          renderSyncLogs();
         }
       });
     }
@@ -688,10 +723,21 @@
         }
         try {
           const status = await GG.Sync.testConnection(cfg);
+          if (GG.Sync.log) GG.Sync.log('连接成功（HTTP ' + status + '）', true, 'test').catch(() => {});
           GG.toast.show('连接成功（HTTP ' + status + '）', 'success');
+          renderSyncLogs();
         } catch (e) {
+          if (GG.Sync.log) GG.Sync.log('连接失败：' + (e && e.message ? e.message : '未知错误'), false, 'test').catch(() => {});
           GG.toast.show('连接失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+          renderSyncLogs();
         }
+      });
+    }
+    if ($('#btnClearLogs')) {
+      $('#btnClearLogs').addEventListener('click', async () => {
+        if (GG.Sync && GG.Sync.clearLogs) await GG.Sync.clearLogs();
+        renderSyncLogs();
+        GG.toast.show('已清空同步日志', 'info');
       });
     }
 
@@ -711,6 +757,11 @@
     settings = Object.assign({}, GG.DEFAULTS, data.settings || {});
     load();
     wire();
+    // 同步日志写入时实时刷新日志面板（后台定时/自动上传也会写日志）
+    GG.api.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (changes && 'syncLogs' in changes) renderSyncLogs();
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);

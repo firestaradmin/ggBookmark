@@ -89,7 +89,12 @@
     if (!GG.Sync) return;
     const raw = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
     const sync = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers(raw) : raw);
-    if (!sync.enabled || !sync.triggers.includes(mode)) return;
+    if (!sync.enabled || !sync.triggers.includes(mode)) {
+      if (window.location && window.location.href.indexOf('newtab') !== -1) {
+        console.log('[gg-sync] maybeSync 跳过', mode, 'enabled=', sync.enabled, 'triggers=', sync.triggers);
+      }
+      return;
+    }
     // 防抖：短时间内多次变更只同步一次
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
@@ -98,30 +103,18 @@
     }, 1500);
   }
 
-  // 统一的手动/自动上传入口：上传并弹出结果提示
+  // 统一的手动/自动上传入口：上传并弹出结果提示（同时记录日志，若日志不可用则忽略）
   async function doUpload(label) {
-    if (!GG.Sync) return;
+    if (!GG.Sync || !GG.Sync.upload) return;
     try {
       await GG.Sync.upload();
+      // 记录日志（非阻断；旧版本 sync.js 无 log 方法时跳过）
+      if (GG.Sync.log) GG.Sync.log(label ? (label + '：已上传') : '已上传到服务器', true, 'upload').catch(() => {});
       GG.toast.show((label ? label + '：' : '') + '已上传到服务器', 'success');
     } catch (e) {
+      if (GG.Sync.log) GG.Sync.log((label ? label + '：' : '') + '上传失败：' + (e && e.message), false, 'upload').catch(() => {});
       GG.toast.show((label ? label + '失败：' : '上传失败：') + (e && e.message), 'error');
     }
-  }
-
-  // 页面级定时同步兜底：即使后台 alarm 未触发，只要新标签页打开即可按间隔上传
-  let intervalSyncTimer = null;
-  function startIntervalSync() {
-    if (intervalSyncTimer) { clearInterval(intervalSyncTimer); intervalSyncTimer = null; }
-    const raw = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
-    const sync = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers(raw) : raw);
-    if (!sync.enabled || !sync.triggers.includes('interval')) return;
-    const ms = Math.max(1, Number(sync.intervalMinutes) || 30) * 60 * 1000;
-    intervalSyncTimer = setInterval(() => {
-      const s = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers((state.settings && state.settings.sync) || GG.DEFAULTS.sync) : (state.settings && state.settings.sync));
-      if (!s.enabled || !s.triggers.includes('interval')) { startIntervalSync(); return; }
-      doUpload('定时同步').catch(() => {});
-    }, ms);
   }
 
   // ---------- Search ----------
@@ -1367,7 +1360,6 @@
     wireButtons();
     wireImportFolder();
     if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
-    startIntervalSync();
     enableGridDrag();
     enableColumnDrop();
     // close menus on outside click / scroll / escape
@@ -1411,7 +1403,6 @@
         else if (prevFavicon !== state.settings.faviconSource) renderCards(); // 图标来源变化需重绘
         else renderCards(); // refresh compact state from global setting
         maybeSync('settingsChange');
-        startIntervalSync();
       }
       if (cardsChanged) {
         // 拖拽高度等局部操作触发的保存，不重渲染整树，避免重置卡片状态
