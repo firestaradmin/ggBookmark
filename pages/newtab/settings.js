@@ -387,15 +387,19 @@
       box.innerHTML = '<div class="sync-log-empty">暂无同步日志</div>';
       return;
     }
-    const actionLabel = { upload: '上传', download: '下载', test: '连接', other: '同步' };
+    const typeLabel = { upload: '上传', download: '下载', test: '连接', other: '同步' };
     box.innerHTML = logs.map((l) => {
       const d = new Date(l.time);
       const time = d.toLocaleString();
-      const act = actionLabel[l.action] || '同步';
+      const act = typeLabel[l.type] || '同步';
+      const source = l.source || '手动';
+      const target = l.target || 'webdav';
+      const filename = l.filename || '';
       const cls = l.ok ? 'ok' : 'err';
+      const parts = [time, act, source, target].filter(Boolean);
+      const line = parts.join(' - ') + (filename ? ' - ' + filename : '');
       return `<div class="sync-log-item ${cls}">
-        <span class="sync-log-time">${time}</span>
-        <span class="sync-log-action">${act}</span>
+        <span class="sync-log-line">${escapeHtml(line)}</span>
         <span class="sync-log-msg">${escapeHtml(l.msg || '')}</span>
       </div>`;
     }).join('');
@@ -687,13 +691,14 @@
     }
     if ($('#btnSyncUpload')) {
       $('#btnSyncUpload').addEventListener('click', async () => {
+        const filename = settings.sync && settings.sync.filename ? settings.sync.filename : 'ggbookmark-config.json';
         try {
           await GG.Sync.upload();
-          if (GG.Sync.log) GG.Sync.log('上传成功', true, 'upload').catch(() => {});
+          if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: true, msg: '上传成功' }).catch(() => {});
           GG.toast.show('已上传到服务器', 'success');
           renderSyncLogs();
         } catch (e) {
-          if (GG.Sync.log) GG.Sync.log('上传失败：' + (e && e.message ? e.message : '未知错误'), false, 'upload').catch(() => {});
+          if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: false, msg: '上传失败：' + (e && e.message ? e.message : '未知错误') }).catch(() => {});
           GG.toast.show('上传失败：' + (e && e.message ? e.message : '未知错误'), 'error');
           renderSyncLogs();
         }
@@ -701,14 +706,15 @@
     }
     if ($('#btnSyncDownload')) {
       $('#btnSyncDownload').addEventListener('click', async () => {
+        const filename = settings.sync && settings.sync.filename ? settings.sync.filename : 'ggbookmark-config.json';
         try {
           await GG.Sync.download();
-          if (GG.Sync.log) GG.Sync.log('下载并应用成功', true, 'download').catch(() => {});
+          if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '手动', target: 'webdav', filename, ok: true, msg: '下载并应用成功' }).catch(() => {});
           GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
           GG.toast.show('已从服务器下载并应用', 'success');
           renderSyncLogs();
         } catch (e) {
-          if (GG.Sync.log) GG.Sync.log('下载失败：' + (e && e.message ? e.message : '未知错误'), false, 'download').catch(() => {});
+          if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '手动', target: 'webdav', filename, ok: false, msg: '下载失败：' + (e && e.message ? e.message : '未知错误') }).catch(() => {});
           GG.toast.show('下载失败：' + (e && e.message ? e.message : '未知错误'), 'error');
           renderSyncLogs();
         }
@@ -721,13 +727,14 @@
           GG.toast.show('请先填写服务器地址', 'info');
           return;
         }
+        const filename = cfg.filename || 'ggbookmark-config.json';
         try {
           const status = await GG.Sync.testConnection(cfg);
-          if (GG.Sync.log) GG.Sync.log('连接成功（HTTP ' + status + '）', true, 'test').catch(() => {});
+          if (GG.Sync.log) GG.Sync.log({ type: 'test', source: '手动', target: 'webdav', filename, ok: true, msg: '连接成功（HTTP ' + status + '）' }).catch(() => {});
           GG.toast.show('连接成功（HTTP ' + status + '）', 'success');
           renderSyncLogs();
         } catch (e) {
-          if (GG.Sync.log) GG.Sync.log('连接失败：' + (e && e.message ? e.message : '未知错误'), false, 'test').catch(() => {});
+          if (GG.Sync.log) GG.Sync.log({ type: 'test', source: '手动', target: 'webdav', filename, ok: false, msg: '连接失败：' + (e && e.message ? e.message : '未知错误') }).catch(() => {});
           GG.toast.show('连接失败：' + (e && e.message ? e.message : '未知错误'), 'error');
           renderSyncLogs();
         }
@@ -758,9 +765,14 @@
     load();
     wire();
     // 同步日志写入时实时刷新日志面板（后台定时/自动上传也会写日志）
+    // 用防抖合并高频写入（如书签批量变更），避免频繁重渲染
+    let logTimer = null;
     GG.api.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
-      if (changes && 'syncLogs' in changes) renderSyncLogs();
+      if (changes && 'syncLogs' in changes) {
+        if (logTimer) clearTimeout(logTimer);
+        logTimer = setTimeout(() => { logTimer = null; renderSyncLogs(); }, 300);
+      }
     });
   }
 

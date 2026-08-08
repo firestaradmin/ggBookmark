@@ -85,6 +85,7 @@
 
   // 根据同步模式触发上传（由设置/书签变更事件调用）
   let syncTimer = null;
+  const SYNC_SOURCE = { settingsChange: '设置更改', bookmarkChange: '书签变更', interval: '定时同步' };
   function maybeSync(mode) {
     if (!GG.Sync) return;
     const raw = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
@@ -99,21 +100,22 @@
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       syncTimer = null;
-      doUpload('自动同步（' + mode + '）');
+      doUpload(SYNC_SOURCE[mode] || mode);
     }, 1500);
   }
 
-  // 统一的手动/自动上传入口：上传并弹出结果提示（同时记录日志，若日志不可用则忽略）
-  async function doUpload(label) {
+  // 统一的手动/自动上传入口：上传并弹出结果提示（同时记录日志）
+  async function doUpload(source) {
     if (!GG.Sync || !GG.Sync.upload) return;
+    const filename = ((state.settings && state.settings.sync && state.settings.sync.filename) || 'ggbookmark-config.json');
+    const base = { type: 'upload', source: source || '手动', target: 'webdav', filename };
     try {
       await GG.Sync.upload();
-      // 记录日志（非阻断；旧版本 sync.js 无 log 方法时跳过）
-      if (GG.Sync.log) GG.Sync.log(label ? (label + '：已上传') : '已上传到服务器', true, 'upload').catch(() => {});
-      GG.toast.show((label ? label + '：' : '') + '已上传到服务器', 'success');
+      if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { ok: true, msg: '上传成功' })).catch(() => {});
+      GG.toast.show((source ? source + '：' : '') + '已上传到服务器', 'success');
     } catch (e) {
-      if (GG.Sync.log) GG.Sync.log((label ? label + '：' : '') + '上传失败：' + (e && e.message), false, 'upload').catch(() => {});
-      GG.toast.show((label ? label + '失败：' : '上传失败：') + (e && e.message), 'error');
+      if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { ok: false, msg: '上传失败：' + (e && e.message) })).catch(() => {});
+      GG.toast.show((source ? source + '失败：' : '上传失败：') + (e && e.message), 'error');
     }
   }
 
@@ -1430,11 +1432,9 @@
         if (t && !t.querySelector('input')) t.textContent = changeInfo.title;
       }
     });
-    // 书签被创建/删除/移动时也触发同步（bookmarkChange 模式）
-    const syncOnBookmark = () => maybeSync('bookmarkChange');
-    GG.api.bookmarks.onCreated.addListener(syncOnBookmark);
-    GG.api.bookmarks.onRemoved.addListener(syncOnBookmark);
-    GG.api.bookmarks.onMoved.addListener(syncOnBookmark);
+    // 书签被创建/删除/移动时触发同步（bookmarkChange 模式）
+    // 注：书签变更的上传已由后台 service worker 统一监听处理（见 sync.js），
+    // 页面无需重复监听，避免与后台重复上传。
     // open menu close
 
     // reload everything when config imported/cleared from settings page

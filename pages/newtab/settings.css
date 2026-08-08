@@ -236,31 +236,21 @@ html[data-theme="light"] .field select option {
 }
 .sync-log-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   padding: 6px 8px;
   border-radius: 7px;
   font-size: 12px;
   background: var(--glass);
 }
-.sync-log-item .sync-log-time {
-  color: var(--text-faint);
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-.sync-log-item .sync-log-action {
-  flex-shrink: 0;
-  padding: 1px 7px;
-  border-radius: 6px;
-  background: var(--glass-strong);
-  color: var(--text-dim);
-}
-.sync-log-item .sync-log-msg {
-  flex: 1;
-  min-width: 0;
+.sync-log-item .sync-log-line {
   color: var(--text);
   word-break: break-word;
 }
-.sync-log-item.ok .sync-log-action { color: #6fdf9a; }
-.sync-log-item.err .sync-log-action { color: #ff7a7a; }
+.sync-log-item .sync-log-msg {
+  color: var(--text-faint);
+  word-break: break-word;
+}
+.sync-log-item.ok .sync-log-line { color: var(--text); }
+.sync-log-item.err .sync-log-line { color: #ff7a7a; }
 .sync-log-item.err .sync-log-msg { color: #ffb3b3; }
