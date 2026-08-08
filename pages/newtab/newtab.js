@@ -611,16 +611,28 @@
   // Column width is controlled globally in settings.
   function setupCardResize(card, app) {
     const handle = card.querySelector('.card-resize');
+    // 同步卡片上的「自适应高度」按钮图标状态（拖动后 fitMode 变为 fixed）
+    const updateFitBtn = () => {
+      const fitBtn = card.querySelector('.card-fit');
+      if (!fitBtn) return;
+      const auto = app.fitMode === 'auto';
+      fitBtn.innerHTML = GG.icon(auto ? 'heightAuto' : 'heightAutoOff');
+      fitBtn.dataset.tip = auto ? '适应高度：开（点击固定高度）' : '适应高度：关（点击自动适应）';
+      fitBtn.classList.toggle('active', auto);
+    };
     // vertical-only cursor is handled via CSS
     handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const startY = e.clientY;
-      const startH = app.fitMode === 'auto'
+      // fitMode 为 undefined（如新建空白卡片）时按自适应高度处理，
+      // 否则会误用 app.bodyH||360 导致起始高度错误（首次拖动跳变）。
+      const startH = (app.fitMode === 'auto' || app.fitMode === undefined)
         ? Math.max(card.querySelector('.card-body').offsetHeight, card.querySelector('.card-body').scrollHeight)
         : (app.bodyH || 360);
       let moved = false;
       app.fitMode = 'fixed';
+      updateFitBtn();
 
       const onMove = (ev) => {
         moved = true;
@@ -638,7 +650,7 @@
         if (moved) {
           // 仅保存高度/紧凑状态，不触发全量重渲染（onChanged 会跳过）
           suppressCardRender = true;
-          persist().then(() => { suppressCardRender = false; recomputeCompact(card, app); });
+          persist().then(() => { suppressCardRender = false; recomputeCompact(card, app); updateFitBtn(); });
         }
       };
       document.addEventListener('mousemove', onMove);
