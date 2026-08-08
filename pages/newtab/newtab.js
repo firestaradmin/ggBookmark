@@ -1059,9 +1059,11 @@
     row.style.paddingLeft = (10 + depth * 4) + 'px';
 
     // only show a toggle arrow when the folder actually contains subfolders
+    // 默认展开到二级：depth 0 的顶层文件夹默认展开（显示二级文件夹）
+    const isExpanded = depth === 0;
     if (children.length) {
       const toggle = document.createElement('span');
-      toggle.className = 'tw-toggle collapsed';
+      toggle.className = 'tw-toggle' + (isExpanded ? '' : ' collapsed');
       toggle.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>`;
       toggle.addEventListener('click', (e) => { e.stopPropagation(); toggleOpen(wrap, toggle); });
       row.appendChild(toggle);
@@ -1096,7 +1098,7 @@
     wrap.appendChild(row);
     if (children.length) {
       const sub = document.createElement('div');
-      sub.className = 'tree-children collapsed';
+      sub.className = 'tree-children' + (isExpanded ? '' : ' collapsed');
       children.forEach((c) => sub.appendChild(buildNode(c, depth + 1)));
       wrap.appendChild(sub);
     }

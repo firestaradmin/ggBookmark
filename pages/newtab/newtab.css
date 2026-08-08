@@ -577,8 +577,9 @@
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--text-dim);
   transition: transform .15s ease;
+  transform: rotate(90deg);   /* 展开：箭头朝下 */
 }
-.tree-row .tw-toggle.collapsed { transform: rotate(-90deg); }
+.tree-row .tw-toggle.collapsed { transform: rotate(0deg); }  /* 折叠：箭头朝右 */
 .tree-row .tw-icon { width: 18px; height: 18px; color: var(--accent); }
 .tree-row .tw-icon svg { width: 100%; height: 100%; }
 .tree-row .tw-title { flex: 1; font-size: 13px;   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

@@ -62,6 +62,26 @@
   min-width: 200px;
 }
 .field input:focus, .field select:focus { border-color: var(--accent); }
+/* 下拉菜单（select）背景用不透明深色，保证选项文字清晰；
+   option 在 Chrome 里走系统下拉渲染，同样强制深底浅字 */
+.field select,
+.field select option {
+  background: #1b2440;
+  color: var(--text);
+}
+.field select option {
+  background-color: #1b2440;
+  color: #eef2fb;
+}
+html[data-theme="light"] .field select,
+html[data-theme="light"] .field select option {
+  background: #ffffff;
+  color: #1b2436;
+}
+html[data-theme="light"] .field select option {
+  background-color: #ffffff;
+  color: #1b2436;
+}
 .field input[type="range"] {
   -webkit-appearance: none; appearance: none;
   flex: 1; min-width: 200px;
