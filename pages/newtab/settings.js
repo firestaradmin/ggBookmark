@@ -597,7 +597,7 @@
         // 导入书签：若会覆盖/新增已有书签，先提示用户备份
         if (imported.bookmarks) {
           const existing = await hasExistingBookmarks();
-          if (existing && !window.confirm('导入的配置包含书签，将重新创建书签（可能与现有书签重复）。\n建议先到 Firefox 书签库备份现有书签，再继续导入。\n仍要继续？')) {
+          if (existing && !window.confirm('导入的配置包含书签，将重新创建书签（可能与现有书签重复）。\n强烈建议先备份现有书签，再导入：\n\n' + existing.join('\n') + '\n\n强烈建议库备份现有书签，再继续导入。\n仍要继续？')) {
             // 仅跳过书签重建，仍导入设置与卡片配置
             skipBookmarks = true;
             GG.toast.show('已跳过书签导入，仅导入设置与卡片', 'info');
