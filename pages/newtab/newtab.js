@@ -1349,6 +1349,8 @@
     currentPick = { card, app, mode: 'card', col: (typeof col === 'number' ? col : null) };
     buildTree();
     $('#pickerTitle').textContent = app ? '重新选择文件夹' : '选择一个书签文件夹';
+    // 根据当前 app 的 recursive 状态初始化「包含子文件夹」复选框
+    $('#pickerRecursive').checked = !!(app && app.recursive);
     $('#folderPickerWrap').classList.remove('hidden');
   }
   const pickerWrap = () => $('#folderPickerWrap');
@@ -1506,6 +1508,7 @@
       GG.api.bookmarks.get(selectedFolderId).then((arr) => {
         if (arr && arr[0]) app.title = arr[0].title;
         app.folderId = selectedFolderId;
+        app.recursive = $('#pickerRecursive').checked; // 同步「包含子文件夹」状态
         persist().then(renderCards);
       });
     } else {
