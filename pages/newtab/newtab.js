@@ -857,8 +857,19 @@
     fitBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       app.fitMode = app.fitMode === 'auto' ? 'fixed' : 'auto';
+      const body = card.querySelector('.card-body');
+      if (app.fitMode === 'auto') {
+        delete app.bodyH;
+        body.dataset.fit = 'auto';
+        body.style.removeProperty('--card-body-h');
+      } else {
+        app.bodyH = Math.round(body.scrollHeight);
+        body.dataset.fit = '';
+        body.style.setProperty('--card-body-h', app.bodyH + 'px');
+      }
+      syncFitBtn();
+      applyCompact(card, app);
       persist();
-      renderCards();
     });
     const compactBtn = card.querySelector('.card-compact');
     const syncCompactBtnCard = () => {
@@ -873,8 +884,9 @@
     compactBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       app.compact = app.compact === undefined ? true : (app.compact ? false : undefined);
+      applyCompact(card, app);
+      syncCompactBtnCard();
       persist();
-      renderCards();
     });
     applyCompact(card, app);
     return card;
