@@ -10,7 +10,8 @@
     activeCategory: null,
     cards: [],            // category filter result -> workspace order [{appId, categoryId}]
     history: [],          // undo stack
-    trash: []
+    trash: [],
+    pinned: []            // 置顶快速访问 [{ id, url, title }]
   };
 
   let cardOrder = [];     // persisted order of {appId} among current category
@@ -21,10 +22,11 @@
   const $ = (s) => document.querySelector(s);
   const grid = $('#grid');
   const catsBar = $('#catsBar');
+  const pinbarItems = $('#pinbarItems');
 
   // ---------- Persistence ----------
   async function loadPersistent() {
-    const data = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
+    const data = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings', 'pinned']);
     state.settings = Object.assign({}, GG.DEFAULTS, data.settings || {});
     window.__ggSettings = state.settings;
     state.apps = data.apps || [];
@@ -33,6 +35,7 @@
       state.categories = [{ id: 'cat0', name: '主要' }, { id: 'cat1', name: '工具' }, { id: 'cat2', name: '游戏' }];
     }
     state.activeCategory = data.activeCat || (state.categories[0] && state.categories[0].id) || null;
+    state.pinned = Array.isArray(data.pinned) ? data.pinned : [];
     const byCat = data.orderByCat || {};
     cardOrder = byCat[state.activeCategory] || [];
     colWidth = state.settings.cardWidth || 320;
@@ -50,7 +53,8 @@
         apps: state.apps,
         categories: state.categories,
         activeCat: state.activeCategory,
-        orderByCat: byCat
+        orderByCat: byCat,
+        pinned: state.pinned
       });
     } finally {
       suppressCardRender = false;
@@ -131,6 +135,128 @@
     if (!q) return;
     const se = GG.SEARCH_ENGINES[state.settings.searchEngine] || GG.SEARCH_ENGINES.bing;
     GG.api.tabs.update({ url: se.url.replace('{q}', encodeURIComponent(q)) });
+  }
+
+  // ---------- 置顶快速访问 ----------
+  const PIN_MIME = 'application/x-gg-pin';
+  function renderPinbar() {
+    const bar = $('#pinbar');
+    if (!bar) return;
+    // 空置顶时隐藏整行
+    bar.classList.toggle('empty', !state.pinned.length);
+    pinbarItems.innerHTML = '';
+    state.pinned.forEach((pin, idx) => {
+      const el = document.createElement('div');
+      el.className = 'pin-item';
+      el.dataset.url = pin.url;
+      el.dataset.idx = idx;
+      el.draggable = true;
+
+      const ico = document.createElement('span');
+      ico.className = 'pin-ico';
+      GG.renderFavicon(ico, pin.url, pin.title, (state.settings && state.settings.faviconSource) || GG.DEFAULTS.faviconSource);
+
+      const name = document.createElement('span');
+      name.className = 'pin-name';
+      name.textContent = pin.title || hostOf(pin.url);
+      name.dataset.tip = pin.url;
+
+      el.append(ico, name);
+      el.addEventListener('click', () => {
+        GG.api.tabs.create({ url: pin.url });
+      });
+      el.addEventListener('contextmenu', (e) => { e.preventDefault(); openPinMenu(e, idx, el); });
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData(PIN_MIME, String(idx));
+        e.dataTransfer.effectAllowed = 'move';
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('dragging'));
+      el.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes(PIN_MIME)) e.preventDefault(); });
+      el.addEventListener('drop', (e) => {
+        if (!e.dataTransfer.types.includes(PIN_MIME)) return;
+        e.preventDefault();
+        const from = Number(e.dataTransfer.getData(PIN_MIME));
+        const to = idx;
+        if (from === to) return;
+        const arr = state.pinned.slice();
+        const [it] = arr.splice(from, 1);
+        arr.splice(to, 0, it);
+        state.pinned = arr;
+        persist();
+        renderPinbar();
+      });
+
+      pinbarItems.appendChild(el);
+    });
+  }
+
+  let pinMenuEl = null;
+  function openPinMenu(e, idx, el) {
+    closePinMenu();
+    const pin = state.pinned[idx];
+    if (!pin) return;
+    const menu = document.createElement('div');
+    menu.className = 'menu glass pin-ctx';
+    const items = [
+      { label: '在新标签打开', ic: 'external', fn: () => GG.api.tabs.create({ url: pin.url }) },
+      { label: '复制链接', ic: 'external', fn: () => navigator.clipboard.writeText(pin.url).then(() => GG.toast.show('已复制链接', 'success')) },
+      { label: '重命名', ic: 'settings', fn: () => renamePin(idx) },
+      { label: '取消置顶', ic: 'backspace', fn: () => removePin(idx), danger: true }
+    ];
+    items.forEach((it) => {
+      const b = document.createElement('button');
+      b.className = 'menu-item' + (it.danger ? ' danger' : '');
+      b.innerHTML = GG.icon(it.ic) + '<span></span>';
+      b.querySelector('span').textContent = it.label;
+      b.addEventListener('click', () => { closePinMenu(); it.fn(); });
+      menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    pinMenuEl = menu;
+    const x = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8);
+    const y = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  }
+  function closePinMenu() {
+    if (pinMenuEl) { pinMenuEl.remove(); pinMenuEl = null; }
+  }
+  function removePin(idx) {
+    state.pinned.splice(idx, 1);
+    persist();
+    renderPinbar();
+  }
+  function renamePin(idx) {
+    const pin = state.pinned[idx];
+    if (!pin) return;
+    const t = prompt('置顶名称：', pin.title || '');
+    if (!t || !t.trim()) return;
+    pin.title = t.trim();
+    persist();
+    renderPinbar();
+  }
+  function addPin(url, title) {
+    if (!url) return;
+    if (!state.pinned.some((p) => p.url === url)) {
+      state.pinned.push({ id: 'pin_' + Date.now(), url, title: title || '' });
+      persist();
+      renderPinbar();
+    }
+  }
+  function wirePinbar() {
+    const addBtn = $('#pinbarAdd');
+    if (addBtn) addBtn.addEventListener('click', () => openPinAddPicker());
+  }
+  // 从书签选择置顶项（+ 按钮）：引导输入网址，或提示右键书签项置顶
+  async function openPinAddPicker() {
+    const chosen = prompt('输入要置顶的网址：\n\n更便捷的方式：在卡片里的书签上右键 → 选择「置顶到快速访问」\n\n示例：https://example.com');
+    if (!chosen) return;
+    let url = chosen.trim();
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    if (!url) return;
+    addPin(url, hostOf(url));
+    GG.toast.show('已添加到置顶', 'success');
   }
 
   // ---------- Categories ----------
@@ -306,6 +432,43 @@
     applyCompact(card, app);
   }
 
+  // 判断 childId 是否位于 ancestorId 的子树内（用于 recursive 卡片）
+  async function isFolderInTree(childId, ancestorId) {
+    if (childId === ancestorId) return true;
+    try {
+      const tree = await GG.api.bookmarks.getSubTree(ancestorId);
+      const root = tree && tree[0];
+      if (!root) return false;
+      let found = false;
+      (function walk(n) {
+        (n.children || []).forEach((c) => {
+          if (c.id === childId) found = true;
+          else walk(c);
+        });
+      })(root);
+      return found;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 书签增删改后，只刷新受影响的卡片（重新获取书签列表并重算紧凑）
+  async function refreshCardsForFolder(folderId) {
+    if (!folderId) return;
+    // 找出绑定该文件夹（或递归包含）的卡片
+    for (const app of state.apps) {
+      if (!app.folderId) continue;
+      const direct = app.folderId === folderId;
+      const recursiveHit = app.recursive && await isFolderInTree(folderId, app.folderId);
+      if (!direct && !recursiveHit) continue;
+      const card = document.querySelector(`.card[data-folder-id="${CSS.escape(app.folderId)}"]`);
+      if (!card) continue;
+      // 重新加载该卡片书签
+      await buildTiles(card, app.folderId, app.recursive, app);
+      applyExclusions(card, app);
+    }
+  }
+
   function hostOf(url) {
     try { return new URL(url).hostname; } catch (e) { return ''; }
   }
@@ -346,6 +509,7 @@
     };
     add('打开', 'external', () => GG.api.tabs.create({ url: bm.url }));
     add('复制链接', 'external', () => navigator.clipboard.writeText(bm.url).then(() => GG.toast.show('已复制链接', 'success')));
+    add('置顶到快速访问', 'target', () => { addPin(bm.url, bm.title); GG.toast.show('已添加到置顶', 'success'); });
     add('移出卡片', 'backspace', () => removeTile(tile, bm, card));
     add('删除书签', 'trash', () => deleteBookmark(tile, bm, card), true);
     document.body.appendChild(menu);
@@ -1347,6 +1511,7 @@
   // ---------- Master render ----------
   function renderAll() {
     renderCats();
+    renderPinbar();
     renderCards();
     render(state.history.length);
     // keep active category button visible
@@ -1359,6 +1524,7 @@
   async function reloadAndRender() {
     await loadPersistent();
     renderCats();
+    renderPinbar();
     renderCards();
     render(state.history.length);
     const cat = document.querySelector(`.cat[data-id="${state.activeCategory}"]`);
@@ -1373,6 +1539,7 @@
     renderSearchEngine();
     wireButtons();
     wireImportFolder();
+    wirePinbar();
     if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
     enableGridDrag();
     enableColumnDrop();
@@ -1382,10 +1549,12 @@
       if (!e.target.closest('#seIcon') && !e.target.closest('#seMenu')) menu.classList.remove('open');
       if (!e.target.closest('.cat-ctx')) closeCatMenu();
       if (!e.target.closest('.tile-ctx')) closeTileMenu();
+      if (!e.target.closest('.pin-ctx')) closePinMenu();
     });
     document.addEventListener('contextmenu', (e) => {
       if (!e.target.closest('.cat')) closeCatMenu();
       if (!e.target.closest('.tile')) closeTileMenu();
+      if (!e.target.closest('.pin-item')) closePinMenu();
       e.preventDefault();
     });
     grid.addEventListener('contextmenu', (e) => {
@@ -1396,7 +1565,8 @@
     document.addEventListener('click', (e) => { if (!e.target.closest('.grid-ctx')) closeGridMenu(); });
     document.addEventListener('scroll', closeCatMenu, true);
     document.addEventListener('scroll', closeTileMenu, true);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatMenu(); closeGridMenu(); closeTileMenu(); } });
+    document.addEventListener('scroll', closePinMenu, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatMenu(); closeGridMenu(); closeTileMenu(); closePinMenu(); } });
     renderAll();
 
     // listen for settings / data changes from settings page (import / clear)
@@ -1444,10 +1614,13 @@
         if (t && !t.querySelector('input')) t.textContent = changeInfo.title;
       }
     });
-    // 书签被创建/删除/移动时触发同步（bookmarkChange 模式）
-    // 注：书签变更的上传已由后台 service worker 统一监听处理（见 sync.js），
-    // 页面无需重复监听，避免与后台重复上传。
-    // open menu close
+    // 书签被创建/删除/移动时：刷新受影响文件夹绑定的卡片（不触发书签上传，上传由后台处理）
+    GG.api.bookmarks.onCreated.addListener((id, node) => { if (node && node.parentId) refreshCardsForFolder(node.parentId); });
+    GG.api.bookmarks.onRemoved.addListener((id, info) => { if (info && info.parentId) refreshCardsForFolder(info.parentId); });
+    GG.api.bookmarks.onMoved.addListener((id, info) => {
+      if (info && info.parentId) refreshCardsForFolder(info.parentId);
+      if (info && info.oldParentId && info.oldParentId !== info.parentId) refreshCardsForFolder(info.oldParentId);
+    });
 
     // reload everything when config imported/cleared from settings page
     GG.api.runtime.onMessage.addListener((msg) => {

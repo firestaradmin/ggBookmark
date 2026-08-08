@@ -580,7 +580,7 @@
 
     // 导出配置为 JSON 文件（不含壁纸图片数据，但包含主页面卡片配置与全部书签）
     $('#btnExport').addEventListener('click', async () => {
-      const stored = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings']);
+      const stored = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings', 'pinned']);
       const cfg = {
         version: GG.VERSION,
         settings: Object.assign({}, stored.settings || {})
@@ -593,6 +593,7 @@
       cfg.categories = stored.categories || [];
       cfg.orderByCat = stored.orderByCat || {};
       cfg.activeCat = stored.activeCat || null;
+      cfg.pinned = stored.pinned || [];
       // 导出被卡片引用的书签子树（不含整个 Firefox 书签树），并记录原始容器与完整路径
       try {
         const snaps = await snapshotBookmarks();
@@ -679,7 +680,8 @@
           apps: apps,
           categories: imported.categories || [],
           orderByCat: imported.orderByCat || {},
-          activeCat: imported.activeCat || null
+          activeCat: imported.activeCat || null,
+          pinned: Array.isArray(imported.pinned) ? imported.pinned : []
         };
         await GG.api.storage.set(toSave);
 
@@ -763,7 +765,7 @@
     // 清除配置：恢复默认并删除本地存储（仅本扩展配置，不删除 Firefox 书签）
     $('#btnClear').addEventListener('click', async () => {
       if (!window.confirm('确定清除所有配置？将恢复默认设置且无法撤销（含卡片与壁纸）。\n注意：此操作仅清除本扩展配置，不会删除 Firefox 中的书签。')) return;
-      await GG.api.storage.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat']);
+      await GG.api.storage.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat', 'pinned']);
       settings = Object.assign({}, GG.DEFAULTS);
       load();
       GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});

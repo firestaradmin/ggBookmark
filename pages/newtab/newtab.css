@@ -44,6 +44,93 @@
   border-bottom: 1px solid var(--glass-border-soft);
 }
 
+/* 置顶快速访问栏 */
+.pinbar {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px;
+  background: rgba(12, 18, 32, 0.45);
+  border-bottom: 1px solid var(--glass-border-soft);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  overflow: hidden;
+}
+html[data-theme="light"] .pinbar {
+  background: rgba(255, 255, 255, 0.5);
+}
+.pinbar-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: var(--glass);
+}
+.pinbar-items {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+}
+.pinbar-items::-webkit-scrollbar { display: none; }
+.pin-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--glass);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .15s ease, border-color .15s ease;
+}
+.pin-item:hover { background: var(--glass-strong); border-color: rgba(255,255,255,.22); }
+.pin-item.dragging { opacity: .4; }
+.pin-item .pin-ico {
+  width: 18px; height: 18px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.pin-item .pin-ico img { width: 16px; height: 16px; }
+.pin-item .pin-ico .letter {
+  font-size: 11px; font-weight: 600; color: var(--text);
+  text-transform: uppercase;
+}
+.pin-item .pin-name {
+  font-size: 12.5px;
+  color: var(--text);
+  max-width: 140px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.pinbar-add {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border: 1px dashed var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all .15s ease;
+}
+.pinbar-add:hover { color: var(--text); background: var(--glass-strong); border-color: rgba(255,255,255,.3); }
+.pinbar-add svg { width: 16px; height: 16px; }
+/* 空置顶栏时不显示整行 */
+.pinbar.empty { display: none; }
+
 /* Categories */
 .cats {
   display: flex;
