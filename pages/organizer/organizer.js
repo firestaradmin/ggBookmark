@@ -169,7 +169,7 @@
       folderId: folderId || DEFAULT_ROOT,
       selection: new Set(),
       lastClicked: null,
-      el: null, head: null, grid: null
+      el: null, head: null, grid: null, crumbs: null
     };
     panels.push(p);
     activePanelId = p.id;
@@ -261,9 +261,13 @@
       grid.className = 'bookmark-grid';
       grid.dataset.panelId = p.id;
 
-      el.append(head, grid);
+      // 路径链路
+      const crumbs = document.createElement('div');
+      crumbs.className = 'panel-crumbs';
+
+      el.append(head, crumbs, grid);
       container.appendChild(el);
-      p.el = el; p.head = head; p.grid = grid;
+      p.el = el; p.head = head; p.grid = grid; p.crumbs = crumbs;
       wireGridDrop(p);
     });
     markActivePanel();
@@ -275,6 +279,7 @@
     const grid = p.grid;
     const children = await getChildren(p.folderId);
     if (p.head) { const t = p.head.querySelector('.ph-title'); if (t) t.textContent = folderTitle(p.folderId); }
+    renderCrumbs(p);
     grid.innerHTML = '';
     // 应用列数
     grid.dataset.cols = orgColumns;
@@ -286,6 +291,51 @@
       return;
     }
     children.forEach((node) => grid.appendChild(buildItem(node, p, children)));
+  }
+
+  // 递归查找 folderId 的祖先路径，返回 [{id,title}, ...]（顶层容器在前，当前文件夹在后）
+  function buildPath(nodes, folderId) {
+    for (const n of nodes) {
+      if (n.id === folderId) return [{ id: n.id, title: n.title || '（未命名）' }];
+      if (n.children) {
+        const sub = buildPath(n.children, folderId);
+        if (sub) return [{ id: n.id, title: n.title || '（未命名）' }].concat(sub);
+      }
+    }
+    return null;
+  }
+  // 渲染面板顶部路径链路
+  function renderCrumbs(p) {
+    if (!p.crumbs) return;
+    const crumbsEl = p.crumbs;
+    crumbsEl.innerHTML = '';
+    let path = null;
+    if (p.folderId === DEFAULT_ROOT) {
+      path = [{ id: DEFAULT_ROOT, title: '书签栏' }];
+    } else {
+      path = buildPath(tree, p.folderId);
+    }
+    if (!path) {
+      // 顶层容器本身（tree 的直接子项）
+      const top = tree.find((t) => t.id === p.folderId);
+      path = top ? [{ id: top.id, title: top.title || '（未命名）' }] : [{ id: p.folderId, title: '书签' }];
+    }
+    path.forEach((seg, i) => {
+      const isLast = i === path.length - 1;
+      const item = document.createElement('span');
+      item.className = 'crumb' + (isLast ? ' current' : '');
+      item.textContent = seg.title;
+      if (!isLast) {
+        item.addEventListener('click', () => { activePanelId = p.id; setPanelFolder(p.id, seg.id); });
+      }
+      crumbsEl.appendChild(item);
+      if (!isLast) {
+        const sep = document.createElement('span');
+        sep.className = 'crumb-sep';
+        sep.textContent = '›';
+        crumbsEl.appendChild(sep);
+      }
+    });
   }
 
   async function getChildren(folderId) {
@@ -546,26 +596,33 @@
     if (del) { pushHistory({ type: 'delete', captured }); GG.toast.show(`已删除 ${del} 项`, 'success'); p.selection.clear(); refresh(); }
   }
 
+  // 递归捕获一个节点的完整信息（含所有层级子项），用于撤销恢复
   async function captureNode(id) {
     const arr = await GG.api.bookmarks.get(id).catch(() => []);
     if (!arr[0]) return null;
     const node = arr[0];
-    return { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: node.type === 'folder' ? (await GG.api.bookmarks.getChildren(id)) : null };
+    let children = null;
+    if (node.type === 'folder') {
+      const kids = await GG.api.bookmarks.getChildren(id);
+      children = [];
+      for (const k of kids) children.push(await captureNode(k.id));
+    }
+    return { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children };
   }
+  // 递归恢复一个被删除的节点（含所有层级子项）
   async function restoreNode(data) {
     if (!data) return;
     if (data.type === 'bookmark') {
       await GG.api.bookmarks.create({ parentId: data.parentId, title: data.title, url: data.url }).catch(() => {});
-    } else {
-      const created = await GG.api.bookmarks.create({ parentId: data.parentId, title: data.title }).catch(() => {});
-      if (created) {
-        for (let i = 0; i < (data.children || []).length; i++) {
-          const child = data.children[i];
-          if (child.type === 'bookmark') { await GG.api.bookmarks.create({ parentId: created.id, title: child.title, url: child.url }).catch(() => {}); }
-          else {
-            const f = await GG.api.bookmarks.create({ parentId: created.id, title: child.title }).catch(() => {});
-            if (f && child.children) for (const gc of child.children) { if (gc.type === 'bookmark') await GG.api.bookmarks.create({ parentId: f.id, title: gc.title, url: gc.url }).catch(() => {}); }
-          }
+      return;
+    }
+    const created = await GG.api.bookmarks.create({ parentId: data.parentId, title: data.title }).catch(() => {});
+    if (created) {
+      for (const child of (data.children || [])) {
+        if (child.type === 'bookmark') {
+          await GG.api.bookmarks.create({ parentId: created.id, title: child.title, url: child.url }).catch(() => {});
+        } else {
+          await restoreNode(Object.assign({}, child, { parentId: created.id }));
         }
       }
     }
@@ -683,13 +740,15 @@
   async function deleteItem(node) {
     if (node.type === 'folder') {
       if (!confirm(`确定删除文件夹“${node.title}”及其所有内容？`)) return;
+      const captured = await captureNode(node.id);
       await GG.api.bookmarks.removeTree(node.id).catch(() => {});
-      pushHistory({ type: 'deleteFolder', id: node.id, title: node.title, parentId: node.parentId });
+      pushHistory({ type: 'deleteFolder', captured: captured });
       GG.toast.show('已删除文件夹', 'success');
     } else {
       if (!confirm(`确定删除书签“${node.title || node.url}”？`)) return;
+      const captured = await captureNode(node.id);
       await GG.api.bookmarks.remove(node.id).catch(() => {});
-      pushHistory({ type: 'delete', captured: { [node.id]: { parentId: node.parentId, title: node.title, url: node.url, type: node.type, index: node.index, children: null } } });
+      pushHistory({ type: 'delete', captured: { [node.id]: captured } });
       GG.toast.show('已删除', 'success');
     }
     refresh();
@@ -697,8 +756,9 @@
 
   async function deleteFolder(node) {
     if (!confirm(`确定删除文件夹“${node.title}”及其所有内容？`)) return;
+    const captured = await captureNode(node.id);
     await GG.api.bookmarks.removeTree(node.id).catch(() => {});
-    pushHistory({ type: 'deleteFolder', id: node.id, title: node.title, parentId: node.parentId });
+    pushHistory({ type: 'deleteFolder', captured: captured });
     GG.toast.show('已删除文件夹', 'success');
     refresh();
   }
@@ -722,7 +782,7 @@
     else if (entry.type === 'move') { for (const id of entry.prev) await GG.api.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {}); GG.toast.show('已撤销移动', 'success'); refresh(); }
     else if (entry.type === 'reorder') { await applyOrderSilent(entry.folderId, entry.prev); GG.toast.show('已撤销排序', 'success'); refresh(); }
     else if (entry.type === 'rename') { await GG.api.bookmarks.update(entry.id, { title: entry.was }).catch(() => {}); renderFolderTree(); refresh(); }
-    else if (entry.type === 'deleteFolder') { if (entry.parentId) await GG.api.bookmarks.create({ parentId: entry.parentId, title: entry.title }).catch(() => {}); renderFolderTree(); }
+    else if (entry.type === 'deleteFolder') { await restoreNode(entry.captured); GG.toast.show('已撤销删除文件夹', 'success'); refresh(); }
     updateToolbar();
   }
   async function applyOrderSilent(folderId, order) {
