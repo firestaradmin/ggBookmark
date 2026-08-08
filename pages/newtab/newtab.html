@@ -17,15 +17,16 @@
     <div class="cats" id="catsBar" aria-label="分类"></div>
 
     <div class="searchwrap glass">
-      <span class="se-icon" id="seIcon" title="切换搜索引擎"></span>
+      <span class="se-icon" id="seIcon" data-tip="切换搜索引擎"></span>
       <input id="searchInput" type="text" placeholder="搜索..." autofocus autocomplete="off" spellcheck="false">
-      <button class="se-go btn primary" id="seGo" title="搜索">搜索</button>
+      <button class="se-go btn primary" id="seGo" data-tip="搜索">搜索</button>
       <div class="menu glass" id="seMenu"></div>
     </div>
 
     <div class="actions">
+      <button class="btn icon-btn" id="btnHelp" data-tip="帮助：使用说明"></button>
       <div class="view-menu-wrap">
-        <button class="btn icon-btn" id="btnView" title="显示设置：紧凑模式与卡片高度"></button>
+        <button class="btn icon-btn" id="btnView" data-tip="显示设置：紧凑模式与卡片高度"></button>
         <div class="menu glass view-menu" id="viewMenu">
           <div class="view-group">
             <div class="view-group-title">紧凑模式（所有卡片）</div>
@@ -40,10 +41,9 @@
           </div>
         </div>
       </div>
-      <button class="btn icon-btn" id="btnOrganize" title="整理书签"></button>
-      <button class="btn icon-btn" id="btnSettings" title="设置"></button>
-      <button class="btn icon-btn" id="btnHelp" title="帮助：使用说明"></button>
-      <button class="btn icon-btn" id="btnAddCard" title="卡片添加：添加一个分类卡片"></button>
+      <button class="btn icon-btn" id="btnOrganize" data-tip="整理书签"></button>
+      <button class="btn icon-btn" id="btnSettings" data-tip="设置"></button>
+      <button class="btn icon-btn" id="btnAddCard" data-tip="卡片添加：添加一个分类卡片"></button>
     </div>
   </header>
 
@@ -72,22 +72,22 @@
         <div class="tile-title"></div>
         <div class="tile-desc"></div>
       </div>
-      <div class="tile-more" tabindex="0" role="button" title="拖动" draggable="true"></div>
+      <div class="tile-more" tabindex="0" role="button" data-tip="拖动" draggable="true"></div>
     </li>
   </template>
 
   <template id="cardTpl">
     <section class="card" data-folder-id="">
       <header class="card-head">
-        <span class="card-drag" draggable="true" title="拖动标题可调整分类顺序"></span>
+        <span class="card-drag" draggable="true" data-tip="拖动标题可调整分类顺序"></span>
         <h2 class="card-title"></h2>
-        <button class="card-compact btn icon-btn" title="紧凑模式"></button>
-        <button class="card-fit btn icon-btn" title="自动适应：根据子项数量调整高度"></button>
-        <button class="card-more btn icon-btn" title="卡片设置"></button>
+        <button class="card-compact btn icon-btn" data-tip="紧凑模式"></button>
+        <button class="card-fit btn icon-btn" data-tip="自动适应：根据子项数量调整高度"></button>
+        <button class="card-more btn icon-btn" data-tip="卡片设置"></button>
         <div class="card-menu menu glass"></div>
       </header>
       <ul class="card-body"></ul>
-      <div class="card-resize" title="拖动右下角调整卡片大小"></div>
+      <div class="card-resize" data-tip="拖动调整卡片高度"></div>
     </section>
   </template>
 

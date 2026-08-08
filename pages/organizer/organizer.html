@@ -13,11 +13,11 @@
   <header class="topbar">
     <div class="brand">
       <h1>整理书签</h1>
-      <button class="btn icon-btn" id="btnHome" title="返回起始页"></button>
+      <button class="btn icon-btn" id="btnHome" data-tip="返回起始页"></button>
     </div>
     <div class="toolbar">
-      <button class="btn icon-btn" id="btnUndo" title="撤回" disabled></button>
-      <button class="btn icon-btn" id="btnDelete" title="删除选中" disabled></button>
+      <button class="btn icon-btn" id="btnUndo" data-tip="撤回" disabled></button>
+      <button class="btn icon-btn" id="btnDelete" data-tip="删除选中" disabled></button>
       <div class="selected-info-pill" id="selectedInfo">未选中</div>
     </div>
   </header>
@@ -28,8 +28,8 @@
       <div class="pane-title">
         <span>文件夹</span>
         <div class="btn-group">
-          <button class="btn icon-btn" id="btnCollapseAll" title="全部折叠"></button>
-          <button class="btn icon-btn" id="btnNewFolder" title="新建文件夹"></button>
+          <button class="btn icon-btn" id="btnCollapseAll" data-tip="全部折叠"></button>
+          <button class="btn icon-btn" id="btnNewFolder" data-tip="新建文件夹"></button>
         </div>
       </div>
       <div id="folderTree" class="folder-tree"></div>

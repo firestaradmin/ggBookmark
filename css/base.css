@@ -187,6 +187,49 @@ html[data-theme="light"] .searchwrap input::placeholder { color: #8a97b3; }
   transition: all .18s ease;
   backdrop-filter: blur(12px);
 }
+
+/* ---- Custom tooltip (glass style) ----
+ * 替代浏览器原生 title 气泡，应用在图标按钮上。hover 时显示深色毛玻璃气泡。 */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(14, 20, 36, 0.92);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity .15s ease, transform .15s ease;
+}
+[data-tip]:hover::after,
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+/* 底部按钮（如卡片上方的工具按钮）气泡显示在上方 */
+[data-tip][data-tip-pos="bottom"]::after {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+}
+[data-tip][data-tip-pos="bottom"]:hover::after,
+[data-tip][data-tip-pos="bottom"]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
 .btn:hover { background: var(--glass-strong); border-color: rgba(255,255,255,.25); }
 .btn:active { transform: translateY(1px); }
 .btn.primary {

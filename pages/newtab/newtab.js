@@ -151,7 +151,7 @@
     // single "+" button at the far right of the category bar
     const add = document.createElement('button');
     add.className = 'cat cat-add';
-    add.title = '新建分类';
+    add.dataset.tip = '新建分类';
     add.textContent = '＋';
     add.addEventListener('click', (e) => { e.stopPropagation(); addCategory(); });
     catsBar.appendChild(add);
@@ -452,7 +452,7 @@
       const btn = document.createElement('button');
       btn.className = 'empty-add-btn';
       btn.innerHTML = GG.icon('addCard');
-      btn.title = '创建新卡片';
+      btn.dataset.tip = '创建新卡片';
       btn.addEventListener('click', () => createBlankCard());
       const p = document.createElement('p');
       p.textContent = '还没有卡片';
@@ -473,7 +473,7 @@
     card.dataset.recursive = app.recursive ? '1' : '0';
     card.querySelector('.card-title').textContent = app.title;
     const titleEl = card.querySelector('.card-title');
-    titleEl.title = '双击重命名';
+    titleEl.dataset.tip = '双击重命名';
     titleEl.addEventListener('dblclick', (e) => {
       e.stopPropagation();
       editCardTitle(card, app, titleEl);
@@ -503,7 +503,7 @@
     const syncFitBtn = () => {
       const auto = app.fitMode === 'auto';
       fitBtn.innerHTML = GG.icon(auto ? 'heightAuto' : 'heightAutoOff');
-      fitBtn.title = auto ? '适应高度：开（点击固定高度）' : '适应高度：关（点击自动适应）';
+      fitBtn.dataset.tip = auto ? '适应高度：开（点击固定高度）' : '适应高度：关（点击自动适应）';
       fitBtn.classList.toggle('active', auto);
     };
     syncFitBtn();
@@ -519,7 +519,7 @@
       const title = app.compact === true ? '当前紧凑模式：固定开启（点击关闭/自动）'
         : (app.compact === false ? '当前紧凑模式：固定关闭（点击恢复自动）' : '当前紧凑模式：自动模式（点击全部开启）');
       compactBtn.innerHTML = GG.icon(ic);
-      compactBtn.title = title;
+      compactBtn.dataset.tip = title;
       compactBtn.classList.toggle('active', app.compact !== false);
     };
     syncCompactBtnCard();
@@ -677,7 +677,7 @@
     // const ic = mode === 'on' ? 'compactOn' : (mode === 'off' ? 'compactOff' : 'compactAuto');
     // btn.innerHTML = GG.icon(ic);
     btn.innerHTML = GG.icon('cardMenu');
-    btn.title = '显示设置：紧凑模式与卡片高度';
+    btn.dataset.tip = '显示设置：紧凑模式与卡片高度';
   }
   // Derive the current global compact state from existing cards.
   function globalCompact() {
@@ -1294,7 +1294,7 @@
     btnOrg.addEventListener('click', () => GG.api.tabs.create({ url: GG.api.runtime.getURL('pages/organizer/organizer.html') }));
     const btnAdd = $('#btnAddCard');
     btnAdd.innerHTML = GG.icon('addCard');
-    btnAdd.title = '卡片添加：新增一个书签卡片';
+    btnAdd.dataset.tip = '卡片添加：新增一个书签卡片';
     btnAdd.addEventListener('click', () => createBlankCard());
     $('#pickerClose').addEventListener('click', closePicker);
     $('#pickerConfirm').addEventListener('click', confirmPick);
