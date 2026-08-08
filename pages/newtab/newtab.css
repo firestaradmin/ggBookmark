@@ -240,7 +240,57 @@
   border-radius: 3px;
 }
 .menu-item.selected { background: rgba(79,124,255,.16); color: #fff; }
-.searchwrap .se-go { margin-left: 6px; height: 34px; padding: 0 16px; border-radius: 18px; }
+.searchwrap .se-go {
+  margin-left: 6px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 18px;
+  position: relative;
+  overflow: hidden;
+  /* 磨砂玻璃：半透明背景 + 模糊，覆盖 .btn.primary 的实心渐变 */
+  background: rgba(79, 124, 255, 0.12);
+  border: 1px solid rgba(79, 124, 255, 0.45);
+  color: #fff;
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: 0 2px 10px rgba(79, 124, 255, 0.18), inset 0 1px 0 rgba(255,255,255,0.12);
+  font-weight: 600;
+  letter-spacing: .5px;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+}
+/* 悬浮扫光特效 */
+.searchwrap .se-go::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left .5s ease;
+  pointer-events: none;
+}
+.searchwrap .se-go:hover {
+  transform: translateY(-2px);
+  background: rgba(79, 124, 255, 0.22);
+  border-color: rgba(79, 124, 255, 0.75);
+  box-shadow: 0 8px 22px rgba(79, 124, 255, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.searchwrap .se-go:hover::before { left: 120%; }
+.searchwrap .se-go:active {
+  transform: translateY(0) scale(.97);
+  box-shadow: 0 2px 8px rgba(79, 124, 255, 0.25);
+}
+/* 聚焦搜索框时按钮更突出 */
+.searchwrap:focus-within .se-go {
+  border-color: rgba(79, 124, 255, 0.7);
+  box-shadow: 0 4px 16px rgba(79, 124, 255, 0.3);
+}
+/* 明亮模式：按钮用深色文字，避免白色背景+白字看不清 */
+html[data-theme="light"] .searchwrap .se-go {
+  color: #1b2436;
+}
 #seMenu {
   top: 50px; left: 0;
   display: none;

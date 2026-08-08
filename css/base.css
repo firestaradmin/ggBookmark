@@ -110,15 +110,6 @@ html[data-theme="light"] .color-dot.active { border-color: var(--text); }
 html[data-theme="light"] .shell { background: rgba(255, 255, 255, 0.35); }
 html[data-theme="light"] .pp-settings .s-head,
 html[data-theme="light"] .nt-settings .s-head { border-bottom-color: var(--glass-border-soft); }
-/* 明亮模式下，把硬编码的深色半透明工具栏/页脚改为浅色，避免深色块突兀 */
-html[data-theme="light"] .topbar {
-  background: rgba(255, 255, 255, 0.55);
-  border-bottom-color: var(--glass-border-soft);
-}
-html[data-theme="light"] .app-footer {
-  background: rgba(255, 255, 255, 0.55);
-  border-color: var(--glass-border-soft);
-}
 /* 明亮模式下搜索框输入文字与占位符加深，保证在浅色背景上清晰 */
 html[data-theme="light"] .searchwrap input { color: #1b2436; }
 html[data-theme="light"] .searchwrap input::placeholder { color: #8a97b3; }

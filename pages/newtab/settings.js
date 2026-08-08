@@ -35,7 +35,8 @@
 
   function applyBgPreview() {
     const bg = $('.gg-bg');
-    const currentStyle = document.querySelector('.seg-btn.active').dataset.bg;
+    const bgActive = document.querySelector('.seg-btn[data-bg].active');
+    const currentStyle = bgActive ? bgActive.dataset.bg : 'default';
     const blur = Number($('#bgBlur').value) || 0;
     const dim = Number($('#bgDim').value);
     $('#bgBlurVal').textContent = blur + 'px';
@@ -329,8 +330,16 @@
     });
   }
 
+  // 根据 settings.backgroundStyle 同步背景风格按钮的选中状态
+  function syncBgSegActive() {
+    const seg = settings.backgroundStyle === 'preset' ? 'preset'
+              : settings.backgroundStyle === 'image' ? 'image'
+              : settings.backgroundStyle === 'gradient' ? 'gradient' : 'default';
+    document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === seg));
+  }
+
   function toggleBgFields() {
-    const style = (document.querySelector('.seg-btn.active') || {}).dataset?.bg || 'default';
+    const style = (document.querySelector('.seg-btn[data-bg].active') || {}).dataset?.bg || 'default';
     const imageField = document.getElementById('imageSourceField');
     const presetField = document.getElementById('presetField');
     const preview = document.getElementById('bgPreview');
@@ -451,7 +460,7 @@
   function updatePreview() {
     const preview = $('#bgPreview');
     const img = $('#previewImg');
-    const style = (document.querySelector('.seg-btn.active') || {}).dataset?.bg || 'default';
+    const style = (document.querySelector('.seg-btn[data-bg].active') || {}).dataset?.bg || 'default';
     const raw = $('#bgUrl').value.trim();
     if (style !== 'image' || !raw) {
       preview.classList.add('hidden');
@@ -501,13 +510,15 @@
         b.classList.add('active');
         settings.theme = b.dataset.theme;
         document.documentElement.dataset.theme = settings.theme;
+        // 保持背景风格按钮的选中状态（避免主题切换时被意外清除）
+        syncBgSegActive();
       });
     });
 
-    // 背景风格切换
-    document.querySelectorAll('.seg-btn').forEach((b) => {
+    // 背景风格切换（仅作用于带 data-bg 的背景风格按钮，排除主题按钮）
+    document.querySelectorAll('.seg-btn[data-bg]').forEach((b) => {
       b.addEventListener('click', () => {
-        document.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
+        document.querySelectorAll('.seg-btn[data-bg]').forEach((x) => x.classList.remove('active'));
         b.classList.add('active');
         if (b.dataset.bg !== 'image' && b.dataset.bg !== 'preset') {
           settings.backgroundImage = '';
@@ -559,7 +570,8 @@
     });
 
     $('#btnSave').addEventListener('click', async () => {
-      settings.backgroundStyle = document.querySelector('.seg-btn.active').dataset.bg;
+      const bgActive = document.querySelector('.seg-btn[data-bg].active');
+      settings.backgroundStyle = bgActive ? bgActive.dataset.bg : 'default';
       settings.backgroundImage = $('#bgUrl').value.trim() || '';
       settings.backgroundBlur = Number($('#bgBlur').value) || 0;
       settings.backgroundDim = Number($('#bgDim').value) || 0;
