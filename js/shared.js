@@ -217,6 +217,15 @@ GG.renderFavicon = function (container, url, title, source) {
     container.innerHTML = '';
     const img = document.createElement('img');
     img.src = dataURL;
+    const fallback = () => {
+      if (container.contains(img)) {
+        img.remove();
+        showLetter();
+      }
+    };
+    // 若缓存/转换出的 dataURL 加载失败，或为 1x1 空白占位图，回退显示首字母
+    img.onload = () => { if (img.naturalWidth <= 1 || img.naturalHeight <= 1) fallback(); };
+    img.onerror = fallback;
     container.appendChild(img);
   };
   const src = GG.faviconUrl ? GG.faviconUrl(url, source) : '';
@@ -232,28 +241,30 @@ GG.renderFavicon = function (container, url, title, source) {
     return;
   }
 
-  // 2) 未命中：显示首字母占位，异步尝试（持久化缓存 -> 网络 -> 写缓存）
+  // 2) 未命中：先查持久化缓存；否则直接用网络 URL 加载（成功即显示，失败显示字母），
+  //    成功后后台转 dataURL 写入缓存，下次命中缓存直接显示。
   showLetter();
   (async () => {
     const cached = await favLoadFromStorage(key);
     if (cached) { showImg(cached); return; }
-    // 请求网络
+    // 直接加载网络 URL（避免先字母后空白：成功就是图，失败就字母）
     const img = new Image();
-    const timer = setTimeout(() => { img.remove(); }, GG.FAVICON_TIMEOUT);
+    const timer = setTimeout(() => { img.remove(); if (!container.querySelector('img')) showLetter(); }, GG.FAVICON_TIMEOUT);
     img.onload = () => {
       clearTimeout(timer);
-      // 用原 src 转 data URL 并缓存
-      favToDataURL(src).then((dataURL) => {
-        if (dataURL) {
-          favStore(key, dataURL);
-          // 仅当容器里仍是占位字母时替换为图标
-          if (container.querySelector('.letter')) showImg(dataURL);
-        }
-      });
+      // 某些服务对无 favicon 的站点返回 1x1 空白占位图，视为无效，回退字母
+      if (img.naturalWidth <= 1 || img.naturalHeight <= 1) {
+        showLetter();
+        return;
+      }
+      // 显示原始网络图（img 已加载，直接 append 显示）
+      showImg(img.src);
+      // 后台转 dataURL 缓存
+      favToDataURL(src).then((dataURL) => { if (dataURL) favStore(key, dataURL); });
     };
     img.onerror = () => {
       clearTimeout(timer);
-      // 失败：显示首字母（已在占位），不缓存
+      showLetter(); // 加载失败：显示首字母
     };
     img.src = src;
   })();
