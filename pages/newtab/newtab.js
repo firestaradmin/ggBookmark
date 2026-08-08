@@ -247,7 +247,7 @@
   }
 
   // ---------- Tile (bookmark) ----------
-  async function buildTiles(card, folderId, recursive) {
+  async function buildTiles(card, folderId, recursive, app) {
     let list;
     try {
       list = await GG.api.bookmarks.getChildren(folderId);
@@ -478,7 +478,7 @@
       ph.addEventListener('click', (e) => { e.stopPropagation(); openPicker(card, app); });
       body.appendChild(ph);
     } else {
-      buildTiles(card, app.folderId, app.recursive);
+      buildTiles(card, app.folderId, app.recursive, app);
       applyExclusions(card, app);
     }
     setupCardResize(card, app);

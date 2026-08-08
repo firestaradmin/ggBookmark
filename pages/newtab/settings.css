@@ -44,7 +44,8 @@
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
-.field label:first-child {
+.field label:first-child,
+.field .f-title {
   width: 110px;
   color: var(--text-dim);
   font-size: 13px;
@@ -112,7 +113,8 @@ html[data-theme="light"] .field select option {
 .data-ops { flex-wrap: wrap; }
 .data-ops .btn { flex: 1; justify-content: center; min-width: 90px; }
 .field.col { flex-direction: column; align-items: stretch; }
-.field.col label:first-child { width: auto; }
+.field.col label:first-child,
+.field.col .f-title { width: auto; }
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

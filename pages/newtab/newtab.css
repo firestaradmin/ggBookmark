@@ -82,10 +82,10 @@
   width: 34px; padding: 8px 0;
   font-size: 18px; line-height: 1;
   color: var(--text-dim);
-  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border: none;
   flex-shrink: 0;
 }
-.cat.cat-add:hover { color: var(--text); background: var(--glass); border-color: rgba(255,255,255,.4); }
+.cat.cat-add:hover { color: var(--text); background: var(--glass); }
 /* category right-click context menu is positioned at the cursor */
 .cat-ctx {
   position: fixed;

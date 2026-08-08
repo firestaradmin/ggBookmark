@@ -108,7 +108,7 @@
         <section class="group">
           <h2>背景</h2>
           <div class="field">
-            <label>背景风格</label>
+            <span class="f-title">背景风格</span>
             <div class="seg">
               <button data-bg="default" class="seg-btn">渐变</button>
               <button data-bg="gradient" class="seg-btn">深色渐变</button>
@@ -117,7 +117,7 @@
             </div>
           </div>
           <div class="field" id="imageSourceField">
-            <label>图片来源</label>
+            <span class="f-title">图片来源</span>
             <input id="bgUrl" type="text" placeholder="https://... 网络图片 URL">
             <label class="btn icon-btn" title="本地上传">
               <input type="file" id="bgFile" accept="image/*" style="display:none">
@@ -130,17 +130,17 @@
             <button class="btn danger btn-sm" id="bgClear">清除</button>
           </div>
           <div class="field col" id="presetField">
-            <label>预设壁纸</label>
+            <span class="f-title">预设壁纸</span>
             <div class="preset-grid" id="presetGrid"></div>
           </div>
           <div class="hint" id="bgHint">选择“自定义图片”或“预设壁纸”后，点击下方缩略图即可应用。</div>
           <div class="field">
-            <label>模糊程度</label>
+            <span class="f-title">模糊程度</span>
             <input id="bgBlur" type="range" min="0" max="40" step="1">
             <span class="range-val" id="bgBlurVal">0px</span>
           </div>
           <div class="field">
-            <label>遮罩透明度</label>
+            <span class="f-title">遮罩透明度</span>
             <input id="bgDim" type="range" min="0" max="0.85" step="0.05">
             <span class="range-val" id="bgDimVal">0.35</span>
           </div>
@@ -149,7 +149,7 @@
         <section class="group">
           <h2>搜索</h2>
           <div class="field">
-            <label>默认搜索引擎</label>
+            <span class="f-title">默认搜索引擎</span>
             <select id="seSelect"></select>
           </div>
         </section>
@@ -157,27 +157,27 @@
         <section class="group">
           <h2>外观</h2>
           <div class="field">
-            <label>主题模式</label>
+            <span class="f-title">主题模式</span>
             <div class="seg">
               <button data-theme="dark" class="seg-btn theme-btn">黑暗</button>
               <button data-theme="light" class="seg-btn theme-btn">明亮</button>
             </div>
           </div>
           <div class="field">
-            <label>主题色</label>
+            <span class="f-title">主题色</span>
             <div class="colors" id="colors"></div>
           </div>
           <div class="field">
-            <label>卡片列宽</label>
+            <span class="f-title">卡片列宽</span>
             <input id="cardWidth" type="range" min="240" max="640" step="20">
             <span class="range-val" id="cardWidthVal">320px</span>
           </div>
           <div class="field">
-            <label>卡片描述</label>
+            <span class="f-title">卡片描述</span>
             <label class="cb"><input type="checkbox" id="showDesc" checked> 显示网站描述（域名）</label>
           </div>
           <div class="field">
-            <label>字体大小</label>
+            <span class="f-title">字体大小</span>
             <select id="fontSize">
               <option value="small">小</option>
               <option value="medium">中</option>
@@ -185,7 +185,7 @@
             </select>
           </div>
           <div class="field">
-            <label>书签图标来源</label>
+            <span class="f-title">书签图标来源</span>
             <select id="faviconSource">
               <option value="faviconsnap">FaviconSnap</option>
               <option value="duckduckgo">DuckDuckGo</option>
@@ -199,7 +199,7 @@
           <section class="group">
             <h2>数据</h2>
             <div class="field col">
-              <label>书签导入文件夹</label>
+              <span class="f-title">书签导入文件夹</span>
               <div style="display:flex; gap:10px; align-items:center; width:100%;">
                 <select id="importFolderSelect" style="flex:1;"></select>
                 <button class="btn ghost" id="btnClearImportFolder">清除</button>
@@ -218,38 +218,38 @@
           <section class="group">
             <h2>同步</h2>
             <div class="field">
-              <label>启用同步</label>
+              <span class="f-title">启用同步</span>
               <label class="cb"><input type="checkbox" id="syncEnabled"> 启用 WebDAV 同步</label>
             </div>
             <div class="field col">
-              <label>服务器地址</label>
+              <span class="f-title">服务器地址</span>
               <input id="syncServer" type="text" placeholder="https://example.com/dav">
             </div>
             <div class="field">
-              <label>用户名</label>
+              <span class="f-title">用户名</span>
               <input id="syncUser" type="text" placeholder="可选">
             </div>
             <div class="field">
-              <label>密码</label>
+              <span class="f-title">密码</span>
               <input id="syncPass" type="password" placeholder="可选">
             </div>
             <div class="field">
-              <label>连接测试</label>
+              <span class="f-title">连接测试</span>
               <button class="btn ghost" id="btnSyncTest">测试连接</button>
             </div>
             <div class="field">
-              <label>文件名</label>
+              <span class="f-title">文件名</span>
               <input id="syncFile" type="text" placeholder="ggbookmark-config.json">
             </div>
             <div class="field col">
-              <label>自动同步触发方式</label>
+              <span class="f-title">自动同步触发方式</span>
               <label class="cb"><input type="checkbox" id="syncTrigInterval" value="interval"> 定时备份（按下方间隔）</label>
               <label class="cb"><input type="checkbox" id="syncTrigSettings" value="settingsChange"> 设置更改时</label>
               <label class="cb"><input type="checkbox" id="syncTrigBookmark" value="bookmarkChange"> 书签被修改时</label>
               <div class="hint">可同时勾选多种触发方式，手动上传/下载按钮始终可用。</div>
             </div>
             <div class="field" id="syncIntervalField">
-              <label>间隔(分钟)</label>
+              <span class="f-title">间隔(分钟)</span>
               <input id="syncInterval" type="number" min="1" value="30">
             </div>
             <div class="field actions data-ops">
