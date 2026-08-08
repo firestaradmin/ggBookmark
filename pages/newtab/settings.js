@@ -21,7 +21,69 @@
     'wallhaven-rrd6gj.webp',
     'wallhaven-z8zd2j.webp'
   ];
+  let currentPreset = ''; // 当前选中的预设壁纸（preset: 引用），与 #bgUrl 输入框分离
   const PRESET_PREFIX = 'preset:';
+  const BLOB_PREFIX = 'blob:'; // 自定义本地图片：settings 只存 blob:文件名 引用，实际图片数据存 IndexedDB
+
+  // ---------- 自定义背景图数据（IndexedDB），避免把大 data URL 存进 chrome.storage ----------
+  const BG_DB = 'gg-bookmark';
+  const BG_STORE = 'backgroundImages';
+  function openBgDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(BG_DB, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(BG_STORE)) {
+          req.result.createObjectStore(BG_STORE, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function saveBgBlob(key, blob) {
+    const db = await openBgDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BG_STORE, 'readwrite');
+      tx.objectStore(BG_STORE).put({ key, blob });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+  async function getBgBlob(key) {
+    const db = await openBgDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BG_STORE, 'readonly');
+      const req = tx.objectStore(BG_STORE).get(key);
+      req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function deleteBgBlob(key) {
+    const db = await openBgDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(BG_STORE, 'readwrite');
+      tx.objectStore(BG_STORE).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  }
+  // 将 IndexedDB 中的 Blob 转成可用的对象 URL；返回 null 表示无图。
+  // 用 object URL（而非超大 data URL）作为 background-image，可支持任意大图片。
+  async function bgBlobURL(key) {
+    const blob = await getBgBlob(key);
+    if (!blob) return null;
+    return URL.createObjectURL(blob);
+  }
+  // 把 data: URL 转成 Blob（用于旧数据迁移）
+  function dataURLtoBlob(dataURL) {
+    const [meta, base64] = dataURL.split(',');
+    const mime = (meta.match(/data:([^;]+)/) || [])[1] || 'application/octet-stream';
+    const bin = atob(base64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
   function presetNameFromValue(value) {
     return value && value.startsWith(PRESET_PREFIX) ? value.slice(PRESET_PREFIX.length) : null;
   }
@@ -33,7 +95,7 @@
     return PRESET_PREFIX + name;
   }
 
-  function applyBgPreview() {
+  async function applyBgPreview() {
     const bg = $('.gg-bg');
     const bgActive = document.querySelector('.seg-btn[data-bg].active');
     const currentStyle = bgActive ? bgActive.dataset.bg : 'default';
@@ -43,14 +105,18 @@
     $('#bgDimVal').textContent = dim.toFixed(2);
     bg.style.setProperty('--bg-blur', blur + 'px');
     bg.style.setProperty('--bg-dim', String(dim));
-    if ((currentStyle === 'image' || currentStyle === 'preset') && $('#bgUrl').value.trim()) {
-      const raw = $('#bgUrl').value.trim();
-      const preset = presetNameFromValue(raw);
-      const imgUrl = preset ? presetURL(preset) : raw;
+    // 自定义图片从输入框读取；预设壁纸从当前选中项读取，互不干扰
+    let raw = currentStyle === 'image' ? $('#bgUrl').value.trim() : currentPreset;
+    let objectUrl = null;
+    // blob: 引用表示自定义本地图片，从 IndexedDB 取回 Blob 并生成对象 URL（支持大图）
+    if (raw && raw.startsWith(BLOB_PREFIX)) {
+      objectUrl = await bgBlobURL(raw.slice(BLOB_PREFIX.length));
+      raw = objectUrl || '';
+    }
+    if ((currentStyle === 'image' || currentStyle === 'preset') && raw) {
+      const imgUrl = currentStyle === 'preset' ? presetURL(presetNameFromValue(raw)) : raw;
       bg.dataset.style = 'image';
       bg.style.setProperty('--bg-image', `url("${imgUrl}")`);
-    } else if (currentStyle === 'preset') {
-      bg.dataset.style = 'default';
     } else if (currentStyle === 'gradient') {
       bg.dataset.style = 'gradient';
     } else {
@@ -126,10 +192,10 @@
       img.loading = 'lazy';
       d.appendChild(img);
       d.addEventListener('click', () => {
-        $('#bgUrl').value = presetRef(name);
-        document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'preset'));
-        settings.backgroundImage = presetRef(name);
+        currentPreset = presetRef(name);
+        settings.backgroundImage = currentPreset;
         settings.backgroundStyle = 'preset';
+        document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'preset'));
         toggleBgFields();
         applyBgPreview();
         updatePreview();
@@ -139,10 +205,9 @@
     });
   }
   function markActivePreset() {
-    const current = $('#bgUrl').value.trim();
-    const sel = presetNameFromValue(current);
+    const sel = presetNameFromValue(currentPreset);
     document.querySelectorAll('#presetGrid .preset').forEach((p) => {
-      p.classList.toggle('active', sel ? p.dataset.name === sel : p.dataset.url === current);
+      p.classList.toggle('active', sel ? p.dataset.name === sel : false);
     });
   }
 
@@ -159,6 +224,7 @@
       }
     });
   }
+  // 快照整个浏览器的书签树（menu/toolbar/unfiled 三个容器及其全部子孙），用于完整备份与还原。
   // 快照整个浏览器的书签树（menu/toolbar/unfiled 三个容器及其全部子孙），用于完整备份与还原。
   async function snapshotBookmarks() {
     const roots = await GG.api.bookmarks.getTree();
@@ -358,12 +424,28 @@
     }
     if (hint) hint.style.display = (style === 'image' || style === 'preset') ? '' : 'none';
   }
-  function load() {
+  async function load() {
     const seg = settings.backgroundStyle === 'preset' ? 'preset'
               : settings.backgroundStyle === 'image' ? 'image'
               : settings.backgroundStyle === 'gradient' ? 'gradient' : 'default';
     document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === seg));
-    $('#bgUrl').value = settings.backgroundImage || '';
+    const bgImageVal = settings.backgroundImage || '';
+    if (bgImageVal.startsWith('data:')) {
+      // 旧版：data URL 直接存在 settings 里，迁移到 IndexedDB 以减小 storage 负担
+      const key = 'legacy-' + Date.now();
+      await saveBgBlob(key, dataURLtoBlob(bgImageVal));
+      settings.backgroundImage = BLOB_PREFIX + key;
+      await GG.saveSettings(settings);
+    }
+    if (settings.backgroundStyle === 'preset') {
+      currentPreset = settings.backgroundImage && settings.backgroundImage.startsWith(PRESET_PREFIX)
+        ? settings.backgroundImage : '';
+      $('#bgUrl').value = '';
+    } else {
+      currentPreset = '';
+      $('#bgUrl').value = settings.backgroundImage || '';
+    }
+    markActivePreset();
     $('#bgBlur').value = settings.backgroundBlur ?? 0;
     $('#bgDim').value = settings.backgroundDim ?? 0.15;
     $('#cardCols').value = settings.cardCols || 3;
@@ -387,11 +469,14 @@
     document.querySelectorAll('.theme-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.theme === (settings.theme || 'dark'));
     });
-    applyBgPreview();
+    await applyBgPreview();
     applyCardWidthPreview();
     updatePreview();
     markActivePreset();
     toggleBgFields();
+    // 本地上传按钮使用 GGicon 的 upload 图标
+    const upIcon = document.getElementById('bgUploadIcon');
+    if (upIcon && GG.icon) upIcon.innerHTML = GG.icon('upload');
     loadSync();
     renderSyncLogs();
   }
@@ -474,27 +559,26 @@
       intervalMinutes: $('#syncInterval') ? (Number($('#syncInterval').value) || 30) : 30
     };
   }
-  function updatePreview() {
+  async function updatePreview() {
     const preview = $('#bgPreview');
     const img = $('#previewImg');
     const style = (document.querySelector('.seg-btn[data-bg].active') || {}).dataset?.bg || 'default';
-    const raw = $('#bgUrl').value.trim();
+    let raw = $('#bgUrl').value.trim();
     if (style !== 'image' || !raw) {
       preview.classList.add('hidden');
       return;
+    }
+    if (raw.startsWith(BLOB_PREFIX)) {
+      raw = await bgBlobURL(raw.slice(BLOB_PREFIX.length));
+      if (!raw) {
+        preview.classList.add('hidden');
+        return;
+      }
     }
     const preset = presetNameFromValue(raw);
     img.src = preset ? presetURL(preset) : raw;
     preview.classList.remove('hidden');
   }
-  function fileToDataURL(file) {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.readAsDataURL(file);
-    });
-  }
-
   function wire() {
     // 背景相关输入框实时预览
     $('#bgUrl').addEventListener('input', () => {
@@ -510,13 +594,16 @@
       updateSyncIntervalVal(e.target.value);
     });
 
-    // 本地图片上传 -> 转为 data URL 插入输入框（自动选“自定义图片”）
+    // 本地图片上传 -> 存入 IndexedDB，仅把轻量引用写入输入框/设置，避免大 data URL 拖慢 storage
     $('#bgFile').addEventListener('change', async (e) => {
       const file = e.target.files && e.target.files[0];
       e.target.value = '';
       if (!file) return;
-      const dataURL = await fileToDataURL(file);
-      $('#bgUrl').value = dataURL;
+      // 直接把原始图片 Blob 存入 IndexedDB（支持任意大小），settings 仅存 blob: 引用
+      const key = 'img-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      await saveBgBlob(key, file);
+      $('#bgUrl').value = BLOB_PREFIX + key;
+      currentPreset = '';
       document.querySelector('[data-bg="image"]').classList.add('active');
       document.querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('active', x.dataset.bg === 'image'));
       toggleBgFields();
@@ -547,8 +634,13 @@
         }
         if (b.dataset.bg === 'preset') {
           // 切换到预设壁纸：若已有预设选择则应用，否则等用户点缩略图
-          const active = document.querySelector('#presetGrid .preset.active');
-          if (active) { settings.backgroundImage = presetRef(active.dataset.name); }
+          if (currentPreset) { settings.backgroundImage = currentPreset; }
+        }
+        if (b.dataset.bg === 'image') {
+          // 切换到自定义图片：仅当输入框有真实 URL 时采用；预设引用不再塞入输入框
+          currentPreset = '';
+          const v = $('#bgUrl').value.trim();
+          if (v.startsWith(PRESET_PREFIX)) $('#bgUrl').value = '';
         }
         toggleBgFields();
         applyBgPreview();
@@ -561,6 +653,7 @@
       $('#bgClear').addEventListener('click', () => {
         $('#bgUrl').value = '';
         $('#bgFile').value = '';
+        currentPreset = '';
         $('#bgPreview').classList.add('hidden');
         applyBgPreview();
         markActivePreset();
@@ -587,15 +680,17 @@
     $('#glassColor').addEventListener('input', applyGlassPreview);
     $('#glassBlur').addEventListener('input', applyGlassPreview);
     $('#glassOpacity').addEventListener('input', applyGlassPreview);
-    $('#bgApply').addEventListener('click', () => {
-      document.querySelector('[data-bg="image"]').click();
-      applyBgPreview();
-    });
 
     $('#btnSave').addEventListener('click', async () => {
       const bgActive = document.querySelector('.seg-btn[data-bg].active');
       settings.backgroundStyle = bgActive ? bgActive.dataset.bg : 'default';
-      settings.backgroundImage = $('#bgUrl').value.trim() || '';
+      if (settings.backgroundStyle === 'preset') {
+        settings.backgroundImage = currentPreset || '';
+      } else if (settings.backgroundStyle === 'image') {
+        settings.backgroundImage = $('#bgUrl').value.trim() || '';
+      } else {
+        settings.backgroundImage = '';
+      }
       settings.backgroundBlur = Number($('#bgBlur').value) || 0;
       settings.backgroundDim = Number($('#bgDim').value) || 0;
       settings.cardCols = Number($('#cardCols').value) || 5;
@@ -623,16 +718,18 @@
     });
 
     if ($('#btnResetBg')) {
-      $('#btnResetBg').addEventListener('click', async () => {
+        $('#btnResetBg').addEventListener('click', async () => {
         settings.backgroundImage = '';
         settings.backgroundStyle = 'default';
         settings.backgroundBlur = 0;
         settings.backgroundDim = 0.15;
         $('#bgUrl').value = '';
+        currentPreset = '';
         $('#bgBlur').value = 0;
         $('#bgDim').value = 0.15;
         document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'default'));
         applyBgPreview();
+        markActivePreset();
         await GG.saveSettings(settings);
         GG.toast.show('已重置背景', 'success');
       });
@@ -640,41 +737,51 @@
 
     // 导出配置为 JSON 文件（不含壁纸图片数据，但包含主页面卡片配置与全部书签）
     $('#btnExport').addEventListener('click', async () => {
-      const stored = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings', 'pinned']);
-      const cfg = {
-        version: GG.VERSION,
-        settings: Object.assign({}, stored.settings || {})
-      };
-      // 仅排除体积很大的本地上传（data URL）壁纸；内置预设壁纸的 runtime URL 予以保留
-      if (cfg.settings.backgroundImage && cfg.settings.backgroundImage.startsWith('data:')) {
-        delete cfg.settings.backgroundImage;
-      }
-      cfg.apps = stored.apps || [];
-      cfg.categories = stored.categories || [];
-      cfg.orderByCat = stored.orderByCat || {};
-      cfg.activeCat = stored.activeCat || null;
-      cfg.pinned = stored.pinned || [];
-      // 导出被卡片引用的书签子树（不含整个 Firefox 书签树），并记录原始容器与完整路径
       try {
-        const snaps = await snapshotBookmarks();
-        cfg.bookmarks = snaps.map((s) => ({
-          node: s.node,
-          containerId: s.containerId,
-          path: s.path
-        }));
+        const stored = await GG.api.storage.get(['apps', 'categories', 'orderByCat', 'activeCat', 'settings', 'pinned']);
+        const cfg = {
+          version: GG.VERSION,
+          settings: Object.assign({}, stored.settings || {})
+        };
+        // 自定义壁纸的图片数据不写入配置，避免体积膨胀：
+        // 本地上传的图片存于 IndexedDB（settings 仅存 blob: 引用），跨设备无法解析，一并剔除；
+        // 网络图片 URL 与内置预设引用予以保留（导入时不会覆盖当前壁纸，见下方导入逻辑）
+        const bg = cfg.settings.backgroundImage || '';
+        if (bg.startsWith('data:') || bg.startsWith(BLOB_PREFIX)) {
+          delete cfg.settings.backgroundImage;
+        }
+        cfg.apps = stored.apps || [];
+        cfg.categories = stored.categories || [];
+        cfg.orderByCat = stored.orderByCat || {};
+        cfg.activeCat = stored.activeCat || null;
+        cfg.pinned = stored.pinned || [];
+        // 导出全部书签（整个浏览器书签树），并记录原始容器与完整路径
+        try {
+          const snaps = await snapshotBookmarks();
+          cfg.bookmarks = snaps.map((s) => ({
+            node: s.node,
+            containerId: s.containerId,
+            path: s.path
+          }));
+        } catch (e) {
+          cfg.bookmarks = null;
+        }
+        const json = JSON.stringify(cfg, null, 2);
+        const filename = 'ggbookmark-config.json';
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        GG.toast.show('已导出配置', 'success');
       } catch (e) {
-        cfg.bookmarks = null;
+        GG.toast.show('导出失败：' + (e && e.message), 'error');
       }
-      const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'ggbookmark-config.json';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      GG.toast.show('已导出配置', 'success');
     });
 
     // 导入配置：触发文件选择，读入后合并并应用
@@ -836,7 +943,7 @@
   async function init() {
     const data = await GG.api.storage.get('settings');
     settings = Object.assign({}, GG.DEFAULTS, data.settings || {});
-    load();
+    await load();
     wire();
     // 同步日志写入时实时刷新日志面板（后台定时/自动上传也会写日志）
     // 用防抖合并高频写入（如书签批量变更），避免频繁重渲染

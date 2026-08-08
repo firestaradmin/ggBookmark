@@ -61,19 +61,52 @@
   }
 
   // ---------- Background image ----------
-  function resolveBgImage(value) {
+  // 自定义本地图片：settings 里存的是 blob:文件名 引用，真实图片 Blob 存在 IndexedDB
+  const BG_DB = 'gg-bookmark';
+  const BG_STORE = 'backgroundImages';
+  function openBgDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(BG_DB, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(BG_STORE)) {
+          req.result.createObjectStore(BG_STORE, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function getBgBlob(key) {
+    try {
+      const db = await openBgDB();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(BG_STORE, 'readonly');
+        const req = tx.objectStore(BG_STORE).get(key);
+        req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+  async function resolveBgImage(value) {
     if (value && value.startsWith('preset:')) {
       const name = value.slice('preset:'.length);
       return GG.api.runtime.getURL('pics/wallpapers/' + name);
     }
+    if (value && value.startsWith('blob:')) {
+      // 用 object URL（而非超大 data URL）作为 background-image，支持任意大图片
+      const blob = await getBgBlob(value.slice('blob:'.length));
+      return blob ? URL.createObjectURL(blob) : '';
+    }
     return value;
   }
-  function applyBg() {
+  async function applyBg() {
     const bg = $('.gg-bg');
     const s = state.settings;
     const hasImage = (s.backgroundStyle === 'image' || s.backgroundStyle === 'preset') && s.backgroundImage;
     bg.dataset.style = hasImage ? 'image' : (s.backgroundStyle === 'gradient' ? 'gradient' : 'default');
-    bg.style.setProperty('--bg-image', `url("${resolveBgImage(s.backgroundImage)}")`);
+    bg.style.setProperty('--bg-image', `url("${await resolveBgImage(s.backgroundImage)}")`);
     bg.style.setProperty('--bg-blur', `${s.backgroundBlur || 0}px`);
     bg.style.setProperty('--bg-dim', `${s.backgroundDim ?? 0.15}`);
     document.documentElement.style.setProperty('--accent-color', s.accentColor);
