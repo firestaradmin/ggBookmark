@@ -797,7 +797,7 @@
     const entry = history.pop();
     if (!entry) return;
     if (entry.type === 'delete') { for (const id of Object.keys(entry.captured)) await restoreNode(entry.captured[id]); GG.toast.show('已撤销删除', 'success'); refresh(); }
-    else if (entry.type === 'move') { for (const id of entry.prev) await GG.api.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {}); GG.toast.show('已撤销移动', 'success'); refresh(); }
+    else if (entry.type === 'move') { for (const id of Object.keys(entry.prev)) await GG.api.bookmarks.move(id, { parentId: entry.prev[id] }).catch(() => {}); GG.toast.show('已撤销移动', 'success'); refresh(); }
     else if (entry.type === 'reorder') { await applyOrderSilent(entry.folderId, entry.prev); GG.toast.show('已撤销排序', 'success'); refresh(); }
     else if (entry.type === 'rename') { await GG.api.bookmarks.update(entry.id, { title: entry.was }).catch(() => {}); renderFolderTree(); refresh(); }
     else if (entry.type === 'deleteFolder') { await restoreNode(entry.captured); GG.toast.show('已撤销删除文件夹', 'success'); refresh(); }

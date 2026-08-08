@@ -793,6 +793,9 @@ html[data-theme="light"] .searchwrap .se-go {
   bottom: 14px;
   transform: translateX(-50%);
   z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 12px;
@@ -803,6 +806,11 @@ html[data-theme="light"] .searchwrap .se-go {
   -webkit-backdrop-filter: blur(20px) saturate(150%);
   pointer-events: none;
   user-select: none;
+}
+.app-footer .footer-version {
+  padding-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-dim);
 }
 
 @media (max-width: 900px) {

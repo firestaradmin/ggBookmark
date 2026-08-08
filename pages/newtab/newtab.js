@@ -1648,6 +1648,12 @@
   // ---------- Init ----------
   async function init() {
     await loadPersistent();
+    // 页脚显示扩展版本号（从 manifest 读取，保持同步）
+    try {
+      const v = chrome.runtime.getManifest().version;
+      const el = document.getElementById('footerVersion');
+      if (el) el.textContent = 'v' + v;
+    } catch (e) { /* 忽略 */ }
     // recompute order for robustness
     applyBg();
     renderSearchEngine();

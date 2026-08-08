@@ -100,6 +100,7 @@ GG.icon = function (name) {
 
   function show(target) {
     if (!target || !target.dataset.tip) return;
+    hide(); // 先移除旧的，避免连续触发时堆积多个 tooltip
     tipEl = document.createElement('div');
     tipEl.className = 'gg-tip';
     tipEl.textContent = target.dataset.tip;
@@ -136,7 +137,8 @@ GG.icon = function (name) {
 
   // 拖拽/滚动时隐藏，避免气泡残留
   document.addEventListener('scroll', hide, true);
-  // 点击时隐藏（点击按钮会改变按钮状态/位置，可能破坏 mouseout 判定，导致旧气泡残留）
+  // 点击/按下时隐藏（覆盖自定义 mousedown 拖拽，如卡片高度手柄）
+  document.addEventListener('mousedown', hide, true);
   document.addEventListener('click', hide, true);
   // 拖拽开始时隐藏（拖拽手柄带有 data-tip，拖拽时 tooltip 可能残留）
   document.addEventListener('dragstart', hide, true);
