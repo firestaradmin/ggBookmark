@@ -362,12 +362,20 @@
     loadSync();
     renderSyncLogs();
   }
-  function loadSync() {
+  async function loadSync() {
     const sync = Object.assign({}, GG.DEFAULTS.sync, settings.sync || {});
     if ($('#syncEnabled')) $('#syncEnabled').checked = !!sync.enabled;
     if ($('#syncServer')) $('#syncServer').value = sync.server || '';
     if ($('#syncUser')) $('#syncUser').value = sync.username || '';
-    if ($('#syncPass')) $('#syncPass').value = sync.password || '';
+    // 密码加密存储：解密后填入输入框
+    const passEl = $('#syncPass');
+    if (passEl) {
+      let pwd = sync.password || '';
+      if (pwd && pwd.indexOf('enc:') === 0 && GG.Sync && GG.Sync.decryptPassword) {
+        pwd = await GG.Sync.decryptPassword(pwd).catch(() => '');
+      }
+      passEl.value = pwd || '';
+    }
     if ($('#syncFile')) $('#syncFile').value = sync.filename || 'ggbookmark-config.json';
     const triggers = Array.isArray(sync.triggers) ? sync.triggers : [];
     if ($('#syncTrigInterval')) $('#syncTrigInterval').checked = triggers.includes('interval');
@@ -543,6 +551,10 @@
       const activeTheme = document.querySelector('.theme-btn.active');
       if (activeTheme) settings.theme = activeTheme.dataset.theme;
       settings.sync = readSync();
+      // 密码加密后存储（不落明文）
+      if (GG.Sync && GG.Sync.encryptPassword && settings.sync.password) {
+        settings.sync.password = await GG.Sync.encryptPassword(settings.sync.password);
+      }
       const activeDot = document.querySelector('.color-dot.active');
       if (activeDot) settings.accentColor = activeDot.dataset.color;
       await GG.saveSettings(settings);
