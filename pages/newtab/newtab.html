@@ -192,17 +192,17 @@
             <select id="cardCols">
               <option value="1">1</option>
               <option value="2">2</option>
-              <option value="3" selected>3</option>
+              <option value="3">3</option>
               <option value="4">4</option>
-              <option value="5">5</option>
+              <option value="5" selected>5</option>
               <option value="6">6</option>
             </select>
-            <span class="range-val" id="cardColsVal">3 列</span>
+            <span class="range-val" id="cardColsVal">5 列</span>
           </div>
           <div class="field">
             <span class="f-title">卡片最小宽度</span>
             <input id="cardMinWidth" type="range" min="160" max="640" step="10">
-            <span class="range-val" id="cardMinWidthVal">320px</span>
+            <span class="range-val" id="cardMinWidthVal">280px</span>
           </div>
           <div class="hint">固定列数不随窗口宽度变化；当窗口放不下时出现横向滚动条。</div>
           <div class="field">
@@ -300,7 +300,8 @@
             </div>
             <div class="field" id="syncIntervalField">
               <span class="f-title">间隔(分钟)</span>
-              <input id="syncInterval" type="number" min="1" value="30">
+              <input id="syncInterval" type="range" min="1" max="120" step="1" value="30">
+              <span class="range-val" id="syncIntervalVal">30 分钟</span>
             </div>
             <div class="field actions data-ops">
               <button class="btn" id="btnSyncUpload">上传到服务器</button>

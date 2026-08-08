@@ -58,8 +58,8 @@
     }
   }
   function applyCardWidthPreview() {
-    const cols = Number($('#cardCols').value) || 3;
-    const minW = Number($('#cardMinWidth').value) || 320;
+    const cols = Number($('#cardCols').value) || 5;
+    const minW = Number($('#cardMinWidth').value) || 280;
     $('#cardColsVal').textContent = cols + ' 列';
     $('#cardMinWidthVal').textContent = minW + 'px';
     document.documentElement.style.setProperty('--card-cols', String(cols));
@@ -395,6 +395,10 @@
     loadSync();
     renderSyncLogs();
   }
+  function updateSyncIntervalVal(v) {
+    const el = document.getElementById('syncIntervalVal');
+    if (el) el.textContent = `${v} 分钟`;
+  }
   async function loadSync() {
     const sync = Object.assign({}, GG.DEFAULTS.sync, settings.sync || {});
     if ($('#syncEnabled')) $('#syncEnabled').checked = !!sync.enabled;
@@ -415,7 +419,12 @@
     if ($('#syncTrigSettings')) $('#syncTrigSettings').checked = triggers.includes('settingsChange');
     if ($('#syncTrigBookmark')) $('#syncTrigBookmark').checked = triggers.includes('bookmarkChange');
     if ($('#syncTrigStartup')) $('#syncTrigStartup').checked = triggers.includes('startup');
-    if ($('#syncInterval')) $('#syncInterval').value = sync.intervalMinutes || 30;
+    const ivEl = $('#syncInterval');
+    if (ivEl) {
+      const v = Math.min(120, Math.max(1, sync.intervalMinutes || 30));
+      ivEl.value = v;
+      updateSyncIntervalVal(v);
+    }
     const iv = document.getElementById('syncIntervalField');
     if (iv) iv.style.display = triggers.includes('interval') ? '' : 'none';
   }
@@ -495,6 +504,11 @@
     });
     $('#bgBlur').addEventListener('input', applyBgPreview);
     $('#bgDim').addEventListener('input', applyBgPreview);
+
+    // 同步间隔滑动条实时显示
+    $('#syncInterval').addEventListener('input', (e) => {
+      updateSyncIntervalVal(e.target.value);
+    });
 
     // 本地图片上传 -> 转为 data URL 插入输入框（自动选“自定义图片”）
     $('#bgFile').addEventListener('change', async (e) => {
@@ -584,8 +598,8 @@
       settings.backgroundImage = $('#bgUrl').value.trim() || '';
       settings.backgroundBlur = Number($('#bgBlur').value) || 0;
       settings.backgroundDim = Number($('#bgDim').value) || 0;
-      settings.cardCols = Number($('#cardCols').value) || 3;
-      settings.cardMinWidth = Number($('#cardMinWidth').value) || 320;
+      settings.cardCols = Number($('#cardCols').value) || 5;
+      settings.cardMinWidth = Number($('#cardMinWidth').value) || 280;
       settings.glassColor = $('#glassColor').value || '#0c1220';
       settings.glassBlur = Number($('#glassBlur').value) || 0;
       settings.glassOpacity = Number($('#glassOpacity').value);

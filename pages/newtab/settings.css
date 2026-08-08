@@ -51,7 +51,7 @@
   font-size: 13px;
   flex-shrink: 0;
 }
-.field input[type="text"], .field select {
+.field input[type="text"], .field input[type="password"], .field select {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   color: var(--text);

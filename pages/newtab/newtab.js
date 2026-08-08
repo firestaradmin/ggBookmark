@@ -108,8 +108,8 @@
   // 应用固定卡片列数与最小宽度（CSS 变量，供 .grid 使用）
   function applyCardCols() {
     const s = state.settings;
-    const cols = Math.max(1, Math.min(Number(s.cardCols) || 3, 8));
-    const minW = Math.max(160, Number(s.cardMinWidth) || 320);
+    const cols = Math.max(1, Math.min(Number(s.cardCols) || 5, 8));
+    const minW = Math.max(160, Number(s.cardMinWidth) || 280);
     document.documentElement.style.setProperty('--card-cols', String(cols));
     document.documentElement.style.setProperty('--card-min-width', minW + 'px');
   }
