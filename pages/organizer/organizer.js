@@ -470,8 +470,9 @@
         // 同文件夹：在目标项前后排序（含文件夹项边缘 = 间隔排序）
         reorderWithin(p, item, e.clientY);
       } else if (sel.dragFromFolder) {
-        // 跨文件夹：移动到当前面板文件夹
-        moveIdsTo(sel.dragIds, p.folderId);
+        // 跨文件夹：移动到当前面板文件夹，并插入到目标项对应位置（前/后）
+        const before = frac < 0.5;
+        moveIdsTo(sel.dragIds, p.folderId, node.id, before);
       }
     });
     return item;
@@ -570,12 +571,29 @@
     renderPanel(p);
   }
 
-  async function moveIdsTo(ids, targetFolder) {
+  // 移动到目标文件夹。targetId + insertBefore 可选：指定插入到某书签/文件夹前/后。
+  async function moveIdsTo(ids, targetFolder, targetId, insertBefore) {
     if (!ids.length) return;
     const prev = {};
     for (const id of ids) { const arr = await GG.api.bookmarks.get(id).catch(() => []); if (arr[0]) prev[id] = arr[0].parentId; }
+    // 计算目标 index（在目标文件夹内）
+    let targetIndex;
+    if (targetId && targetFolder) {
+      const kids = await GG.api.bookmarks.getChildren(targetFolder).catch(() => []);
+      const rest = kids.filter((k) => !ids.includes(k.id));
+      let t = rest.findIndex((k) => k.id === targetId);
+      if (t === -1) t = rest.length;
+      targetIndex = insertBefore ? t : t + 1;
+    }
     let moved = 0;
-    for (const id of ids) { try { await GG.api.bookmarks.move(id, { parentId: targetFolder }); moved++; } catch (e) {} }
+    for (const id of ids) {
+      const dest = { parentId: targetFolder };
+      if (targetIndex !== undefined) {
+        dest.index = targetIndex;
+        targetIndex++; // 后续项依次往后
+      }
+      try { await GG.api.bookmarks.move(id, dest); moved++; } catch (e) {}
+    }
     if (moved) { pushHistory({ type: 'move', prev, target: targetFolder, ids }); GG.toast.show(`已移动 ${moved} 项`, 'success'); refresh(); }
   }
   function moveSelectedTo(folderId) {
