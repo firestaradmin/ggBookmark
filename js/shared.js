@@ -101,12 +101,14 @@ GG.icon = function (name) {
   function show(target) {
     if (!target || !target.dataset.tip) return;
     hide(); // 先移除旧的，避免连续触发时堆积多个 tooltip
-    tipEl = document.createElement('div');
-    tipEl.className = 'gg-tip';
-    tipEl.textContent = target.dataset.tip;
-    document.body.appendChild(tipEl);
-    place(target);
-    requestAnimationFrame(() => tipEl.classList.add('show'));
+    const el = document.createElement('div');
+    el.className = 'gg-tip';
+    el.textContent = target.dataset.tip;
+    document.body.appendChild(el);
+    tipEl = el;
+    place(el);
+    // rAF 回调前可能已被新的 show/hide 移除，需确认仍是当前元素
+    requestAnimationFrame(() => { if (tipEl === el) el.classList.add('show'); });
   }
 
   function hide() {

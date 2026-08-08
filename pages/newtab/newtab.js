@@ -1721,17 +1721,27 @@
         else GG.toast.show(msg.msg || '定时同步失败', 'error');
       }
     });
-    // folder renamed elsewhere -> sync card title
+    // folder renamed elsewhere -> sync card title; 书签重命名 -> 同步卡片内书签项标题
     GG.api.bookmarks.onChanged.addListener((id, changeInfo) => {
       if (changeInfo.title === undefined) return;
+      // 1) 若是文件夹（某卡片绑定的 folderId）被重命名，同步卡片标题
       const app = state.apps.find((a) => a.folderId === id);
-      if (!app) return;
-      app.title = changeInfo.title;
-      persist();
-      const card = document.querySelector(`.card[data-folder-id="${CSS.escape(id)}"]`);
-      if (card) {
-        const t = card.querySelector('.card-title');
-        if (t && !t.querySelector('input')) t.textContent = changeInfo.title;
+      if (app) {
+        app.title = changeInfo.title;
+        persist();
+        const card = document.querySelector(`.card[data-folder-id="${CSS.escape(id)}"]`);
+        if (card) {
+          const t = card.querySelector('.card-title');
+          if (t && !t.querySelector('input')) t.textContent = changeInfo.title;
+        }
+        return;
+      }
+      // 2) 若是书签项被重命名，同步卡片内对应的书签项标题
+      const tile = document.querySelector(`.tile[data-bookmark-id="${CSS.escape(id)}"]`);
+      if (tile) {
+        const titleEl = tile.querySelector('.tile-title');
+        if (titleEl) titleEl.textContent = changeInfo.title;
+        tile.dataset.title = changeInfo.title;
       }
     });
     // 书签被创建/删除/移动时：刷新受影响文件夹绑定的卡片（不触发书签上传，上传由后台处理）
