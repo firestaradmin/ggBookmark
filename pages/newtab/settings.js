@@ -59,6 +59,20 @@
   function applyCardWidthPreview() {
     $('#cardWidthVal').textContent = $('#cardWidth').value + 'px';
   }
+  // 磨砂玻璃滑块实时预览：更新显示值并写入 CSS 变量（即时生效）
+  function applyGlassPreview() {
+    const color = $('#glassColor').value || '#0c1220';
+    const blur = Number($('#glassBlur').value) || 0;
+    const op = Number($('#glassOpacity').value);
+    $('#glassColorVal').textContent = color;
+    $('#glassBlurVal').textContent = blur + 'px';
+    $('#glassOpacityVal').textContent = op.toFixed(2);
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    document.documentElement.style.setProperty('--glass-blur', blur + 'px');
+    document.documentElement.style.setProperty('--panel-bg', `rgba(${r}, ${g}, ${b}, ${op})`);
+  }
 
   function buildSeSelect() {
     const sel = $('#seSelect');
@@ -337,8 +351,12 @@
     document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === seg));
     $('#bgUrl').value = settings.backgroundImage || '';
     $('#bgBlur').value = settings.backgroundBlur ?? 0;
-    $('#bgDim').value = settings.backgroundDim ?? 0.35;
+    $('#bgDim').value = settings.backgroundDim ?? 0.15;
     $('#cardWidth').value = settings.cardWidth || 320;
+    $('#glassColor').value = settings.glassColor || '#ffffff';
+    $('#glassBlur').value = settings.glassBlur ?? 20;
+    $('#glassOpacity').value = settings.glassOpacity ?? 0.06;
+    applyGlassPreview();
     buildSeSelect();
     $('#seSelect').value = settings.searchEngine || 'bing';
     $('#showDesc').checked = settings.showDescriptions !== false;
@@ -532,6 +550,9 @@
       });
     }
     $('#cardWidth').addEventListener('input', applyCardWidthPreview);
+    $('#glassColor').addEventListener('input', applyGlassPreview);
+    $('#glassBlur').addEventListener('input', applyGlassPreview);
+    $('#glassOpacity').addEventListener('input', applyGlassPreview);
     $('#bgApply').addEventListener('click', () => {
       document.querySelector('[data-bg="image"]').click();
       applyBgPreview();
@@ -543,6 +564,9 @@
       settings.backgroundBlur = Number($('#bgBlur').value) || 0;
       settings.backgroundDim = Number($('#bgDim').value) || 0;
       settings.cardWidth = Number($('#cardWidth').value) || 320;
+      settings.glassColor = $('#glassColor').value || '#0c1220';
+      settings.glassBlur = Number($('#glassBlur').value) || 0;
+      settings.glassOpacity = Number($('#glassOpacity').value);
       settings.searchEngine = $('#seSelect').value;
       settings.showDescriptions = $('#showDesc').checked;
       settings.fontSize = $('#fontSize').value;
@@ -567,10 +591,10 @@
         settings.backgroundImage = '';
         settings.backgroundStyle = 'default';
         settings.backgroundBlur = 0;
-        settings.backgroundDim = 0.35;
+        settings.backgroundDim = 0.15;
         $('#bgUrl').value = '';
         $('#bgBlur').value = 0;
-        $('#bgDim').value = 0.35;
+        $('#bgDim').value = 0.15;
         document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'default'));
         applyBgPreview();
         await GG.saveSettings(settings);

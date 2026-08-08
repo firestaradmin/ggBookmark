@@ -30,37 +30,40 @@
 
 .topbar {
   position: sticky;
-  top: 0;
+  top: 10px;
   z-index: 40;
+  margin: 10px 14px 0;
   height: var(--topbar-h);
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(420px, 720px) minmax(280px, 1fr);
   gap: 20px;
   align-items: center;
   padding: 0 22px;
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  background: rgba(12, 18, 32, 0.55);
-  border-bottom: 1px solid var(--glass-border-soft);
+  border-radius: 18px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.04);
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  background: var(--panel-bg, rgba(12, 18, 32, 0.55));
 }
 
 /* 置顶快速访问栏 */
 .pinbar {
   position: sticky;
-  top: var(--topbar-h);
+  top: calc(var(--topbar-h) + 18px);
   z-index: 35;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 18px;
-  background: rgba(12, 18, 32, 0.45);
-  border-bottom: 1px solid var(--glass-border-soft);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  margin: 8px 14px 0;
+  padding: 6px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.04);
+  background: var(--panel-bg, rgba(12, 18, 32, 0.45));
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(140%);
   overflow: hidden;
-}
-html[data-theme="light"] .pinbar {
-  background: rgba(255, 255, 255, 0.5);
 }
 .pinbar-label {
   flex-shrink: 0;
@@ -394,11 +397,11 @@ html[data-theme="light"] .pinbar {
 .card-set-folder:hover { background: rgba(79, 124, 255, 0.12); color: #fff; }
 .card {
   width: 100%;
-  background: var(--glass);
+  background: var(--panel-bg, var(--glass));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
   /* soft inner edge keeps the card readable over any background without a
      glowing white outline */
   box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.04);

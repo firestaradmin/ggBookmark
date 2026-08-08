@@ -182,6 +182,22 @@
             <span class="range-val" id="cardWidthVal">320px</span>
           </div>
           <div class="field">
+            <span class="f-title">背景颜色</span>
+            <input id="glassColor" type="color" value="#ffffff">
+            <span class="range-val" id="glassColorVal">#ffffff</span>
+          </div>
+          <div class="field">
+            <span class="f-title">磨砂模糊</span>
+            <input id="glassBlur" type="range" min="0" max="40" step="1">
+            <span class="range-val" id="glassBlurVal">20px</span>
+          </div>
+          <div class="field">
+            <span class="f-title">背景透明</span>
+            <input id="glassOpacity" type="range" min="0" max="1" step="0.01">
+            <span class="range-val" id="glassOpacityVal">0.06</span>
+          </div>
+          <div class="hint" id="glassHint">背景颜色作用于顶部工具栏、卡片与置顶行；模糊控制磨砂程度；透明度越低越透出背景（调 0 即全透明）。</div>
+          <div class="field">
             <span class="f-title">卡片描述</span>
             <label class="cb"><input type="checkbox" id="showDesc" checked> 显示网站描述（域名）</label>
           </div>

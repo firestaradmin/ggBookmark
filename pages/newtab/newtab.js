@@ -76,7 +76,7 @@
     bg.dataset.style = hasImage ? 'image' : (s.backgroundStyle === 'gradient' ? 'gradient' : 'default');
     bg.style.setProperty('--bg-image', `url("${resolveBgImage(s.backgroundImage)}")`);
     bg.style.setProperty('--bg-blur', `${s.backgroundBlur || 0}px`);
-    bg.style.setProperty('--bg-dim', `${s.backgroundDim ?? 0.35}`);
+    bg.style.setProperty('--bg-dim', `${s.backgroundDim ?? 0.15}`);
     document.documentElement.style.setProperty('--accent-color', s.accentColor);
     document.documentElement.style.setProperty('--accent', s.accentColor);
     document.documentElement.style.setProperty('--accent-2', s.accentColor);
@@ -85,6 +85,24 @@
     document.querySelectorAll('.theme-btn').forEach((b) => {
       b.classList.toggle('active', (b.dataset.theme === (s.theme || 'dark')));
     });
+    applyGlass();
+  }
+
+  // 应用磨砂玻璃设置（顶部工具栏/卡片/置顶行的模糊度、背景颜色与透明度）
+  function applyGlass() {
+    const s = state.settings;
+    const blur = (typeof s.glassBlur === 'number' && s.glassBlur >= 0) ? s.glassBlur : 20;
+    const op = (typeof s.glassOpacity === 'number' && s.glassOpacity >= 0 && s.glassOpacity <= 1) ? s.glassOpacity : 0.06;
+    let color = s.glassColor || '#ffffff';
+    // 解析颜色为 rgb
+    let r = 255, g = 255, b = 255;
+    if (/^#([0-9a-f]{6})$/i.test(color)) {
+      r = parseInt(color.slice(1, 3), 16);
+      g = parseInt(color.slice(3, 5), 16);
+      b = parseInt(color.slice(5, 7), 16);
+    }
+    document.documentElement.style.setProperty('--glass-blur', blur + 'px');
+    document.documentElement.style.setProperty('--panel-bg', `rgba(${r}, ${g}, ${b}, ${op})`);
   }
 
   // 根据同步模式触发上传（由设置/书签变更事件调用）
