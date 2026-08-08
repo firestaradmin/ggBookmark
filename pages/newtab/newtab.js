@@ -39,15 +39,22 @@
   }
 
   async function persist() {
-    const data = await GG.api.storage.get('orderByCat');
-    const byCat = data.orderByCat || {};
-    byCat[state.activeCategory] = cardOrder;
-    await GG.api.storage.set({
-      apps: state.apps,
-      categories: state.categories,
-      activeCat: state.activeCategory,
-      orderByCat: byCat
-    });
+    // 本页面自己的保存已自行触发渲染，抑制 onChanged 触发的重复 reloadAndRender；
+    // 仅外部来源（设置页导入/清除）的 onChanged 会执行 reloadAndRender。
+    suppressCardRender = true;
+    try {
+      const data = await GG.api.storage.get('orderByCat');
+      const byCat = data.orderByCat || {};
+      byCat[state.activeCategory] = cardOrder;
+      await GG.api.storage.set({
+        apps: state.apps,
+        categories: state.categories,
+        activeCat: state.activeCategory,
+        orderByCat: byCat
+      });
+    } finally {
+      suppressCardRender = false;
+    }
   }
 
   // ---------- Background image ----------
@@ -110,7 +117,6 @@
     const sync = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers(raw) : raw);
     if (!sync.enabled || !sync.triggers.includes('interval')) return;
     const ms = Math.max(1, Number(sync.intervalMinutes) || 30) * 60 * 1000;
-    console.log('[gg-sync] 页面级定时同步已启动，间隔(ms)=' + ms);
     intervalSyncTimer = setInterval(() => {
       const s = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers((state.settings && state.settings.sync) || GG.DEFAULTS.sync) : (state.settings && state.settings.sync));
       if (!s.enabled || !s.triggers.includes('interval')) { startIntervalSync(); return; }

@@ -152,13 +152,17 @@
     return subs;
   }
   async function hasExistingBookmarks() {
+    const names = [];
     for (const r of ['menu________', 'toolbar_____', 'unfiled_____']) {
       try {
         const kids = await GG.api.bookmarks.getChildren(r);
-        if (kids && kids.length) return true;
+        if (kids && kids.length) {
+          const rootName = r === 'toolbar_____' ? '书签栏' : '其他书签';
+          names.push(rootName);
+        }
       } catch (e) { /* ignore */ }
     }
-    return false;
+    return names;
   }
   // 重建导出的书签子树：将其内部内容（文件夹 + 书签）直接导入到用户选定的目标文件夹下，
   // 不再额外包裹一层顶层文件夹，保留原有的内部子文件夹结构。返回 { newPathToId, idToPath }
@@ -597,7 +601,10 @@
         // 导入书签：若会覆盖/新增已有书签，先提示用户备份
         if (imported.bookmarks) {
           const existing = await hasExistingBookmarks();
-          if (existing && !window.confirm('导入的配置包含书签，将重新创建书签（可能与现有书签重复）。\n强烈建议先备份现有书签，再导入：\n\n' + existing.join('\n') + '\n\n强烈建议库备份现有书签，再继续导入。\n仍要继续？')) {
+          const existingHint = existing.length
+            ? ('\n\n当前已有书签的位置：' + existing.join('、'))
+            : '';
+          if (existing.length && !window.confirm('导入的配置包含书签，将重新创建书签（可能与现有书签重复）。\n强烈建议先到浏览器书签管理器备份现有书签，再继续导入。' + existingHint + '\n\n仍要继续导入书签吗？')) {
             // 仅跳过书签重建，仍导入设置与卡片配置
             skipBookmarks = true;
             GG.toast.show('已跳过书签导入，仅导入设置与卡片', 'info');

@@ -146,9 +146,13 @@ GG.icon = function (name) {
 const FAV_CACHE_PREFIX = 'favicon:';
 const favMemCache = new Map();          // key -> dataURL  （内存一级缓存）
 const favStorage = GG.api && GG.api.storage; // chrome.storage.local
+GG.FAVICON_TIMEOUT = 20000; // ms; 图标加载超过该时间仍未成功则放弃，显示首字母
 
+// 用「来源 + 网站主机名」作为缓存键，避免同一站点多个 URL 重复缓存图标
 function favKey(source, url) {
-  return FAV_CACHE_PREFIX + (source || '') + ':' + (url || '');
+  let host = url;
+  try { host = new URL(url).host; } catch (e) { /* 保持原样 */ }
+  return FAV_CACHE_PREFIX + (source || '') + ':' + host;
 }
 
 // 从持久化缓存加载单个键到内存
