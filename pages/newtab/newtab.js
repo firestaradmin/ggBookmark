@@ -15,6 +15,7 @@
 
   let cardOrder = [];     // persisted order of {appId} among current category
   let colWidth = 320;     // global card column width (px), set in settings
+  let suppressCardRender = false; // 拖拽高度等局部操作时，避免 onChanged 触发全量重渲染
 
   // ---------- DOM ----------
   const $ = (s) => document.querySelector(s);
@@ -299,6 +300,9 @@
       li.textContent = '这个文件夹是空的';
       body.appendChild(li);
     }
+    // tiles 渲染完成后重算紧凑模式：此时 tile 数量已正确，
+    // 否则 buildCardEl 里同步调用 applyCompact 时 tiles 尚未加载，会误判。
+    applyCompact(card, app);
   }
 
   function hostOf(url) {
@@ -613,7 +617,11 @@
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        if (moved) { persist(); recomputeCompact(card, app); }
+        if (moved) {
+          // 仅保存高度/紧凑状态，不触发全量重渲染（onChanged 会跳过）
+          suppressCardRender = true;
+          persist().then(() => { suppressCardRender = false; recomputeCompact(card, app); });
+        }
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
@@ -1378,7 +1386,8 @@
         startIntervalSync();
       }
       if (cardsChanged) {
-        reloadAndRender();
+        // 拖拽高度等局部操作触发的保存，不重渲染整树，避免重置卡片状态
+        if (!suppressCardRender) reloadAndRender();
       }
     });
     // 后台定时同步的结果通知（仅影响提示，不影响同步本身）
