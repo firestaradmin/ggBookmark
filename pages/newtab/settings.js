@@ -408,6 +408,7 @@
     if ($('#syncTrigInterval')) $('#syncTrigInterval').checked = triggers.includes('interval');
     if ($('#syncTrigSettings')) $('#syncTrigSettings').checked = triggers.includes('settingsChange');
     if ($('#syncTrigBookmark')) $('#syncTrigBookmark').checked = triggers.includes('bookmarkChange');
+    if ($('#syncTrigStartup')) $('#syncTrigStartup').checked = triggers.includes('startup');
     if ($('#syncInterval')) $('#syncInterval').value = sync.intervalMinutes || 30;
     const iv = document.getElementById('syncIntervalField');
     if (iv) iv.style.display = triggers.includes('interval') ? '' : 'none';
@@ -447,6 +448,7 @@
     if ($('#syncTrigInterval') && $('#syncTrigInterval').checked) triggers.push('interval');
     if ($('#syncTrigSettings') && $('#syncTrigSettings').checked) triggers.push('settingsChange');
     if ($('#syncTrigBookmark') && $('#syncTrigBookmark').checked) triggers.push('bookmarkChange');
+    if ($('#syncTrigStartup') && $('#syncTrigStartup').checked) triggers.push('startup');
     return {
       enabled: $('#syncEnabled') ? $('#syncEnabled').checked : false,
       server: $('#syncServer') ? $('#syncServer').value.trim() : '',
