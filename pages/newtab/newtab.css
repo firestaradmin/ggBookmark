@@ -315,6 +315,11 @@ html[data-theme="light"] .searchwrap .se-go {
 #seMenu {
   top: 50px; left: 0;
   display: none;
+  /* 与卡片一致的背景风格：不透明磨砂背景 + 20px 模糊 */
+  background: rgba(44, 44, 45, 0.85);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
 }
 #seMenu.open { display: block; }
 
@@ -856,6 +861,18 @@ html[data-theme="light"] .searchwrap .se-go {
   padding-left: 10px;
   border-left: 1px solid rgba(255, 255, 255, 0.15);
   color: var(--text-dim);
+}
+.app-footer .footer-github {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  color: var(--text-dim);
+  transition: color .15s ease, transform .15s ease;
+}
+.app-footer .footer-github:hover {
+  color: var(--accent);
+  transform: translateY(-1px);
 }
 
 @media (max-width: 900px) {
