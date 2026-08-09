@@ -7,21 +7,37 @@
   const GLASS_COLORS = ['#ffffff', '#e8ecf5', '#8b93a8', '#0c1220', '#dbe7ff', '#ffd9d9', '#dff3e3', '#ffeec2'];
   const $ = (s) => document.querySelector(s);
   let settings = {};
+  // 同步引擎自动维护的元数据字段：保存设置时不得被页面内存旧值覆盖，否则下次同步会误判远端变更。
+  const SYNC_META_KEYS = ['lastSyncAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion'];
+  // 保存设置：以页面内存 settings 为准，但同步元数据字段强制取 storage 最新值。
+  // 这样避免用陈旧的页面内存 settings 整体覆盖 storage 而把它们回退成旧值/undefined，
+  // 导致下次同步 remoteChanged 误判为 true → 假冲突。
+  async function saveSettingsPreservingSyncMeta(settingsObj) {
+    const latest = await GG.api.storage.get('settings');
+    const ls = (latest && latest.settings) || {};
+    const merged = Object.assign({}, ls, settingsObj);
+    for (const k of SYNC_META_KEYS) {
+      merged[k] = ls[k] || (k === 'lastSyncedFingerprint' ? '' : 0);
+    }
+    await GG.saveSettings(merged);
+    return merged;
+  }
   const PRESET_WALLPAPERS = [
-    'mojave_dynamic-14_scaled.webp',
-    'Scene_D_1.webp',
-    'vgoxxm.webp',
-    'wallhaven-1k6y7g_scaled.webp',
-    'wallhaven-1ko5xg.webp',
-    'wallhaven-7229oo.webp',
-    'wallhaven-83qyry.webp',
-    'wallhaven-9d17m1.webp',
-    'wallhaven-gp1977.webp',
-    'wallhaven-jxlk35.webp',
-    'wallhaven-kxov7q.webp',
-    'wallhaven-pkq3zp.webp',
-    'wallhaven-rrd6gj.webp',
-    'wallhaven-z8zd2j.webp'
+    '1.webp',
+    '2.webp',
+    '3.webp',
+    '4.webp',
+    '5.webp',
+    '6.webp',
+    '7.webp',
+    '8.webp',
+    '9.webp',
+    '10.webp',
+    '11.webp',
+    '12.webp',
+    '13.webp',
+    '14.webp',
+    '15.webp'
   ];
   let currentPreset = ''; // 当前选中的预设壁纸（preset: 引用），与 #bgUrl 输入框分离
   const PRESET_PREFIX = 'preset:';
@@ -721,7 +737,7 @@
       const key = 'legacy-' + Date.now();
       await saveBgBlob(key, dataURLtoBlob(bgImageVal));
       settings.backgroundImage = BLOB_PREFIX + key;
-      await GG.saveSettings(settings);
+      await saveSettingsPreservingSyncMeta(settings);
     }
     if (settings.backgroundStyle === 'preset') {
       currentPreset = settings.backgroundImage && settings.backgroundImage.startsWith(PRESET_PREFIX)
@@ -1001,7 +1017,7 @@
       $('#btnClearImportFolder').addEventListener('click', () => {
         $('#importFolderSelect').value = '';
         settings.bookmarkImportFolder = '';
-        GG.saveSettings(settings);
+        saveSettingsPreservingSyncMeta(settings);
         GG.toast.show('已清除默认导入文件夹', 'info');
       });
     }
@@ -1009,7 +1025,7 @@
     if ($('#importFolderSelect')) {
       $('#importFolderSelect').addEventListener('change', () => {
         settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
-        GG.saveSettings(settings);
+        saveSettingsPreservingSyncMeta(settings);
         GG.toast.show('已记住书签导入文件夹', 'success');
       });
     }
@@ -1081,7 +1097,8 @@
       if (activeDot) settings.accentColor = activeDot.dataset.color;
       // 记录本地变更时间，供同步冲突判定；确保严格大于上次同步点，避免同毫秒误判
       settings.lastLocalChangeAt = Math.max(Date.now(), (settings.lastSyncAt || 0) + 1);
-      await GG.saveSettings(settings);
+      // 合并 storage 最新同步元数据，避免覆盖成旧值导致误判远端变更
+      await saveSettingsPreservingSyncMeta(settings);
       if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
       refreshSyncStatus();
       GG.toast.show('设置已保存', 'success');
@@ -1100,7 +1117,7 @@
         document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'default'));
         applyBgPreview();
         markActivePreset();
-        await GG.saveSettings(settings);
+        await saveSettingsPreservingSyncMeta(settings);
         GG.toast.show('已重置背景', 'success');
       });
     }

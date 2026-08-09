@@ -60,6 +60,20 @@
     }
   }
 
+  // 保存设置：以 state.settings 为准，但同步元数据字段强制取 storage 最新值。
+  // 避免用页面内存中可能过期的 state.settings 整体覆盖 storage，导致同步误判远端变更。
+  async function saveSettingsPreservingSyncMeta() {
+    const latest = await GG.api.storage.get('settings');
+    const ls = (latest && latest.settings) || {};
+    const merged = Object.assign({}, ls, state.settings);
+    for (const k of ['lastSyncAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion']) {
+      merged[k] = ls[k] || (k === 'lastSyncedFingerprint' ? '' : 0);
+    }
+    state.settings = merged;
+    await GG.saveSettings(merged);
+    return merged;
+  }
+
   // ---------- Background image ----------
   // 自定义本地图片：settings 里存的是 blob:文件名 引用，真实图片 Blob 存在 IndexedDB
   const BG_DB = 'gg-bookmark';
@@ -1179,14 +1193,14 @@
     sel.addEventListener('change', () => {
       const folder = sel.value || '';
       state.settings.bookmarkImportFolder = folder;
-      GG.saveSettings(state.settings);
+      saveSettingsPreservingSyncMeta();
       GG.toast.show(folder ? '已记住书签导入文件夹' : '已清除默认导入文件夹', folder ? 'success' : 'info');
     });
     const clearBtn = document.getElementById('btnClearImportFolder');
     if (clearBtn) clearBtn.addEventListener('click', () => {
       sel.value = '';
       state.settings.bookmarkImportFolder = '';
-      GG.saveSettings(state.settings);
+      saveSettingsPreservingSyncMeta();
       GG.toast.show('已清除默认导入文件夹', 'info');
     });
   }
@@ -2126,7 +2140,7 @@
         document.querySelectorAll('.theme-btn').forEach((x) => x.classList.remove('active'));
         b.classList.add('active');
         state.settings.theme = b.dataset.theme;
-        GG.saveSettings(state.settings);
+        saveSettingsPreservingSyncMeta();
         document.documentElement.dataset.theme = state.settings.theme;
       });
     });
@@ -2178,7 +2192,7 @@
       b.querySelector('span:last-child').textContent = se.name;
       b.addEventListener('click', () => {
         state.settings.searchEngine = key;
-        GG.saveSettings(state.settings);
+        saveSettingsPreservingSyncMeta();
         renderSearchEngine();
         menu.classList.remove('open');
       });
