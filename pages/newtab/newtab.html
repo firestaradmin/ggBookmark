@@ -293,24 +293,53 @@
               <span class="f-title">文件名</span>
               <input id="syncFile" type="text" placeholder="ggbookmark-config.json">
             </div>
+            <div class="field">
+              <span class="f-title">同步方向</span>
+              <select id="syncDirection">
+                <option value="both">双向同步（自动判断上传/下载）</option>
+                <option value="up">仅上传（本地 → 服务器）</option>
+                <option value="down">仅下载（服务器 → 本地）</option>
+              </select>
+            </div>
+            <div class="field">
+              <span class="f-title">同步内容</span>
+              <label class="cb"><input type="checkbox" id="syncBookmarks" checked> 同步书签内容（取消后仅同步设置与卡片）</label>
+            </div>
+            <div class="field">
+              <span class="f-title">版本化备份</span>
+              <label class="cb"><input type="checkbox" id="syncVersioned"> 每次上传保留带时间戳的历史版本（最多 10 份）</label>
+            </div>
             <div class="field col">
               <span class="f-title">自动同步触发方式</span>
               <label class="cb"><input type="checkbox" id="syncTrigInterval" value="interval"> 定时备份（按下方间隔）</label>
               <label class="cb"><input type="checkbox" id="syncTrigSettings" value="settingsChange"> 设置更改时</label>
               <label class="cb"><input type="checkbox" id="syncTrigBookmark" value="bookmarkChange"> 书签被修改时</label>
               <label class="cb"><input type="checkbox" id="syncTrigStartup" value="startup"> 浏览器启动时</label>
-              <div class="hint">可同时勾选多种触发方式，手动上传/下载按钮始终可用。</div>
+              <div class="hint">可同时勾选多种触发方式；自动同步会先比较本地与远端，再决定上传或下载。</div>
             </div>
             <div class="field" id="syncIntervalField">
               <span class="f-title">间隔(分钟)</span>
               <input id="syncInterval" type="range" min="1" max="120" step="1" value="30">
               <span class="range-val" id="syncIntervalVal">30 分钟</span>
             </div>
-            <div class="field actions data-ops">
-              <button class="btn" id="btnSyncUpload">上传到服务器</button>
-              <button class="btn" id="btnSyncDownload">从服务器下载</button>
+            <div class="sync-status" id="syncStatusBox">
+              <div class="sync-status-row"><span class="k">上次成功</span><span class="v" id="syncLastSuccess">—</span></div>
+              <div class="sync-status-row"><span class="k">下次定时</span><span class="v" id="syncNextRun">—</span></div>
+              <div class="sync-status-row"><span class="k">远端状态</span><span class="v" id="syncRemoteState">未检查</span><button class="btn btn-sm ghost" id="btnSyncCheck">检查状态</button></div>
             </div>
-            <div class="hint">上传/下载的配置文件与导入导出格式完全一致。修改上述同步设置后请点击“保存设置”。</div>
+            <div class="field actions data-ops">
+              <button class="btn primary" id="btnSyncNow">立即同步</button>
+              <button class="btn" id="btnSyncUpload">强制上传</button>
+              <button class="btn" id="btnSyncDownload">强制下载</button>
+            </div>
+            <div class="hint">「立即同步」按上方方向策略自动判断；强制上传/下载不做任何比较，直接覆盖。修改同步设置后请点击“保存设置”。</div>
+            <div class="field col" id="versionField">
+              <div class="sync-log-head" style="margin-top:0">
+                <span class="f-title">历史版本</span>
+                <button class="btn btn-sm" id="btnListVersions">查看版本备份</button>
+              </div>
+              <div class="version-list" id="versionList"></div>
+            </div>
             <div class="field col sync-log-head">
               <span class="f-title">同步日志</span>
               <button class="btn btn-sm" id="btnClearLogs">清空日志</button>

@@ -210,22 +210,34 @@
     if (syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(() => {
       syncTimer = null;
-      doUpload(SYNC_SOURCE[mode] || mode);
+      doAutoSync(SYNC_SOURCE[mode] || mode);
     }, 1500);
   }
 
-  // 统一的手动/自动上传入口：上传并弹出结果提示（同时记录日志）
-  async function doUpload(source) {
-    if (!GG.Sync || !GG.Sync.upload) return;
+  // 自动同步统一入口：双向策略下先比较再决定上传/下载；冲突时提示用户到设置页处理
+  async function doAutoSync(source) {
+    if (!GG.Sync || !GG.Sync.smartSync) return;
     const filename = ((state.settings && state.settings.sync && state.settings.sync.filename) || 'ggbookmark-config.json');
-    const base = { type: 'upload', source: source || '手动', target: 'webdav', filename };
+    const base = { source: source || '手动', target: 'webdav', filename };
     try {
-      await GG.Sync.upload();
-      if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { ok: true, msg: '上传成功' })).catch(() => {});
-      GG.toast.show((source ? source + '：' : '') + '已上传到服务器', 'success');
+      const r = await GG.Sync.smartSync({ source });
+      if (r.action === 'uploaded') {
+        if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'upload', ok: true, msg: '上传成功（' + (r.bookmarkCount != null ? r.bookmarkCount + ' 个书签' : '') + '）' })).catch(() => {});
+        GG.toast.show((source ? source + '：' : '') + '已上传到服务器', 'success');
+      } else if (r.action === 'downloaded') {
+        if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'download', ok: true, msg: '远端较新，已下载并应用' })).catch(() => {});
+        GG.toast.show((source ? source + '：' : '') + '远端较新，已下载并应用', 'success');
+        reloadAndRender();
+      } else if (r.action === 'in-sync') {
+        // 已是最新，静默跳过
+      } else if (r.action === 'conflict' || r.action === 'big-change') {
+        const what = r.action === 'conflict' ? '本地与远端均有修改（冲突）' : '远端变更超过 20%';
+        if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'other', ok: false, msg: what + '，请到设置页处理' })).catch(() => {});
+        GG.toast.show((source ? source + '：' : '') + what + '，请到「设置 → 同步」选择处理方式', 'error');
+      }
     } catch (e) {
-      if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { ok: false, msg: '上传失败：' + (e && e.message) })).catch(() => {});
-      GG.toast.show((source ? source + '失败：' : '上传失败：') + (e && e.message), 'error');
+      if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'upload', ok: false, msg: '同步失败：' + (e && e.message) })).catch(() => {});
+      GG.toast.show((source ? source + '失败：' : '同步失败：') + (e && e.message), 'error');
     }
   }
 
@@ -2248,8 +2260,8 @@
     GG.api.runtime.onMessage.addListener((msg) => {
       if (!msg || msg.type !== 'gg-sync-log') return;
       if (GG.toast) {
-        if (msg.ok) GG.toast.show(msg.msg || '定时同步成功', 'success');
-        else GG.toast.show(msg.msg || '定时同步失败', 'error');
+        if (msg.ok) GG.toast.show(msg.msg || '同步成功', 'success');
+        else GG.toast.show(msg.msg || '同步失败', 'error');
       }
     });
     // folder renamed elsewhere -> sync card title; 书签重命名 -> 同步卡片内书签项标题

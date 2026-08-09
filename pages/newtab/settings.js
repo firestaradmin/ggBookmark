@@ -499,6 +499,9 @@
       passEl.value = pwd || '';
     }
     if ($('#syncFile')) $('#syncFile').value = sync.filename || 'ggbookmark-config.json';
+    if ($('#syncDirection')) $('#syncDirection').value = ['both', 'up', 'down'].includes(sync.direction) ? sync.direction : 'both';
+    if ($('#syncBookmarks')) $('#syncBookmarks').checked = sync.syncBookmarks !== false;
+    if ($('#syncVersioned')) $('#syncVersioned').checked = !!sync.versionedBackup;
     const triggers = Array.isArray(sync.triggers) ? sync.triggers : [];
     if ($('#syncTrigInterval')) $('#syncTrigInterval').checked = triggers.includes('interval');
     if ($('#syncTrigSettings')) $('#syncTrigSettings').checked = triggers.includes('settingsChange');
@@ -512,6 +515,52 @@
     }
     const iv = document.getElementById('syncIntervalField');
     if (iv) iv.style.display = triggers.includes('interval') ? '' : 'none';
+    refreshSyncStatus();
+  }
+
+  // ---------- 同步状态显示（上次成功 / 下次定时 / 远端状态 / 冲突提示） ----------
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    try { return new Date(ts).toLocaleString(); } catch (e) { return '—'; }
+  }
+  async function refreshSyncStatus() {
+    const lastEl = document.getElementById('syncLastSuccess');
+    const nextEl = document.getElementById('syncNextRun');
+    const remoteEl = document.getElementById('syncRemoteState');
+    if (!lastEl || !nextEl) return;
+    // 上次成功时间 / 冲突状态
+    if (GG.Sync && GG.Sync.getSyncState) {
+      const st = await GG.Sync.getSyncState();
+      lastEl.textContent = fmtTime(st.lastSuccessAt) + (st.lastDirection === 'download' ? '（下载）' : st.lastDirection === 'upload' ? '（上传）' : '');
+      if (remoteEl && st.conflict) {
+        remoteEl.className = 'v conflict';
+        remoteEl.textContent = st.conflict.type === 'big-change'
+          ? '远端变更超过 20%，待确认'
+          : '本地与远端均有修改（冲突）';
+      } else if (remoteEl && (remoteEl.textContent === '远端变更超过 20%，待确认' || remoteEl.textContent === '本地与远端均有修改（冲突）' || remoteEl.classList.contains('conflict'))) {
+        remoteEl.className = 'v';
+        remoteEl.textContent = '未检查';
+      }
+    }
+    // 下次定时备份时间：直接读取 alarm 计划时间
+    nextEl.className = 'v';
+    try {
+      const alarm = await GG.api.alarms.get(GG.Sync ? GG.Sync.SYNC_ALARM : 'gg-sync-interval');
+      if (alarm && alarm.scheduledTime) {
+        nextEl.textContent = fmtTime(alarm.scheduledTime);
+      } else {
+        const sync = Object.assign({}, GG.DEFAULTS.sync, settings.sync || {});
+        const triggers = Array.isArray(sync.triggers) ? sync.triggers : [];
+        if (sync.enabled && triggers.includes('interval')) {
+          nextEl.textContent = '未调度（保存设置后生效）';
+          nextEl.className = 'v warn';
+        } else {
+          nextEl.textContent = '未启用';
+        }
+      }
+    } catch (e) {
+      nextEl.textContent = '—';
+    }
   }
   // 渲染同步日志面板
   async function renderSyncLogs() {
@@ -555,6 +604,9 @@
       username: $('#syncUser') ? $('#syncUser').value.trim() : '',
       password: $('#syncPass') ? $('#syncPass').value : '',
       filename: ($('#syncFile') ? $('#syncFile').value.trim() : '') || 'ggbookmark-config.json',
+      direction: $('#syncDirection') ? $('#syncDirection').value : 'both',
+      syncBookmarks: $('#syncBookmarks') ? $('#syncBookmarks').checked : true,
+      versionedBackup: $('#syncVersioned') ? $('#syncVersioned').checked : false,
       triggers: triggers,
       intervalMinutes: $('#syncInterval') ? (Number($('#syncInterval').value) || 30) : 30
     };
@@ -712,8 +764,11 @@
       }
       const activeDot = document.querySelector('.color-dot.active');
       if (activeDot) settings.accentColor = activeDot.dataset.color;
+      // 记录本地变更时间，供同步冲突判定（保留已有的同步元数据字段）
+      settings.lastLocalChangeAt = Date.now();
       await GG.saveSettings(settings);
       if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
+      refreshSyncStatus();
       GG.toast.show('设置已保存', 'success');
     });
 
@@ -766,6 +821,13 @@
         } catch (e) {
           cfg.bookmarks = null;
         }
+        // 统计书签 / 文件夹数量，随配置一并导出，便于备份文件快速识别内容
+        if (GG.Sync && GG.Sync.countBookmarksInConfig) {
+          const stats = GG.Sync.countBookmarksInConfig(cfg);
+          cfg.bookmarkCount = stats.bookmarkCount;
+          cfg.folderCount = stats.folderCount;
+        }
+        cfg.exportedAt = Date.now();
         const json = JSON.stringify(cfg, null, 2);
         const filename = 'ggbookmark-config.json';
         const blob = new Blob([json], { type: 'application/json' });
@@ -778,7 +840,7 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
-        GG.toast.show('已导出配置', 'success');
+        GG.toast.show('已导出配置（' + (cfg.bookmarkCount != null ? cfg.bookmarkCount + ' 个书签' : '无书签') + '）', 'success');
       } catch (e) {
         GG.toast.show('导出失败：' + (e && e.message), 'error');
       }
@@ -870,14 +932,124 @@
         if (iv) iv.style.display = syncTrigInterval.checked ? '' : 'none';
       });
     }
+
+    // 冲突 / 大幅变更确认弹窗：返回 'local'（保留本地上传）| 'remote'（下载远端）| null（取消）
+    function showConflictModal(info, isBigChange) {
+      return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'gg-modal-overlay';
+        const box = document.createElement('div');
+        box.className = 'gg-modal';
+        const title = document.createElement('div');
+        title.className = 'gg-modal-tip';
+        title.style.fontWeight = '600';
+        title.textContent = isBigChange ? '远端配置将大幅修改本地书签' : '检测到同步冲突';
+        const detail = document.createElement('div');
+        detail.className = 'gg-modal-tip';
+        const lines = [];
+        if (info && info.remoteLastModified) lines.push('远端修改时间：' + fmtTime(info.remoteLastModified));
+        if (info && info.remoteBookmarkCount != null) lines.push('远端书签：' + info.remoteBookmarkCount + ' 个');
+        if (info && info.localBookmarkCount != null) lines.push('本地书签：' + info.localBookmarkCount + ' 个');
+        if (info && info.diff) {
+          const pct = Math.round((info.diff.ratio || 0) * 100);
+          lines.push('预计变化：新增 ' + info.diff.added + ' 个 / 移除 ' + info.diff.removed + ' 个（约 ' + pct + '%）');
+        }
+        if (isBigChange) lines.push('远端覆盖本地将超过 20% 的书签变化，请确认是否继续。');
+        else lines.push('本地与远端在上次同步后都发生过修改，请选择保留哪一份。');
+        detail.textContent = lines.join('\n');
+        detail.style.whiteSpace = 'pre-line';
+        const row = document.createElement('div');
+        row.className = 'gg-modal-row';
+        const btnLocal = document.createElement('button');
+        btnLocal.className = 'btn';
+        btnLocal.textContent = '保留本地（上传）';
+        const btnRemote = document.createElement('button');
+        btnRemote.className = 'btn primary';
+        btnRemote.textContent = isBigChange ? '确认覆盖（下载）' : '保留远端（下载）';
+        const btnCancel = document.createElement('button');
+        btnCancel.className = 'btn btn-ghost';
+        btnCancel.textContent = '取消';
+        row.appendChild(btnLocal);
+        row.appendChild(btnRemote);
+        row.appendChild(btnCancel);
+        box.appendChild(title);
+        box.appendChild(detail);
+        box.appendChild(row);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        function close(val) { overlay.remove(); resolve(val); }
+        btnLocal.addEventListener('click', () => close('local'));
+        btnRemote.addEventListener('click', () => close('remote'));
+        btnCancel.addEventListener('click', () => close(null));
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+      });
+    }
+
+    // 应用下载结果后刷新界面与主页
+    async function afterDownloaded() {
+      const data = await GG.api.storage.get('settings');
+      settings = Object.assign({}, GG.DEFAULTS, data.settings || {});
+      load();
+      GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
+    }
+
+    function syncFilename() {
+      return (settings.sync && settings.sync.filename) ? settings.sync.filename : 'ggbookmark-config.json';
+    }
+
+    // 立即同步：按方向策略自动判断上传/下载；冲突或大幅变更时弹窗询问
+    if ($('#btnSyncNow')) {
+      $('#btnSyncNow').addEventListener('click', async () => {
+        const filename = syncFilename();
+        try {
+          GG.toast.show('正在检查同步状态…', 'info');
+          const r = await GG.Sync.smartSync({ source: '手动' });
+          if (r.action === 'uploaded') {
+            if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: true, msg: '上传成功（' + r.bookmarkCount + ' 个书签）' }).catch(() => {});
+            GG.toast.show('已上传到服务器（' + r.bookmarkCount + ' 个书签）', 'success');
+          } else if (r.action === 'downloaded') {
+            if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '手动', target: 'webdav', filename, ok: true, msg: '远端较新，已下载并应用' }).catch(() => {});
+            GG.toast.show('远端较新，已下载并应用', 'success');
+            await afterDownloaded();
+          } else if (r.action === 'in-sync') {
+            GG.toast.show('本地与远端已是最新，无需同步', 'info');
+          } else if (r.action === 'conflict' || r.action === 'big-change') {
+            const choice = await showConflictModal(r.info, r.action === 'big-change');
+            if (choice === 'local') {
+              const rr = await GG.Sync.resolveConflict('local');
+              if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: true, msg: '冲突已解决：保留本地并上传' }).catch(() => {});
+              GG.toast.show('已保留本地并上传（' + (rr.bookmarkCount != null ? rr.bookmarkCount + ' 个书签' : '') + '）', 'success');
+            } else if (choice === 'remote') {
+              await GG.Sync.resolveConflict('remote');
+              if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '手动', target: 'webdav', filename, ok: true, msg: '冲突已解决：下载远端配置' }).catch(() => {});
+              GG.toast.show('已下载远端配置并应用', 'success');
+              await afterDownloaded();
+            } else {
+              GG.toast.show('已取消同步', 'info');
+            }
+          }
+          renderSyncLogs();
+          refreshSyncStatus();
+        } catch (e) {
+          if (GG.Sync.log) GG.Sync.log({ type: 'other', source: '手动', target: 'webdav', filename, ok: false, msg: '同步失败：' + (e && e.message ? e.message : '未知错误') }).catch(() => {});
+          GG.toast.show('同步失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+          renderSyncLogs();
+          refreshSyncStatus();
+        }
+      });
+    }
+
+    // 强制上传：不做比较直接覆盖远端
     if ($('#btnSyncUpload')) {
       $('#btnSyncUpload').addEventListener('click', async () => {
-        const filename = settings.sync && settings.sync.filename ? settings.sync.filename : 'ggbookmark-config.json';
+        const filename = syncFilename();
         try {
-          await GG.Sync.upload();
-          if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: true, msg: '上传成功' }).catch(() => {});
-          GG.toast.show('已上传到服务器', 'success');
+          const r = await GG.Sync.upload();
+          const cnt = r && r.bookmarkCount != null ? '（' + r.bookmarkCount + ' 个书签）' : '';
+          if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: true, msg: '强制上传成功' + cnt }).catch(() => {});
+          GG.toast.show('已上传到服务器' + cnt, 'success');
           renderSyncLogs();
+          refreshSyncStatus();
         } catch (e) {
           if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: false, msg: '上传失败：' + (e && e.message ? e.message : '未知错误') }).catch(() => {});
           GG.toast.show('上传失败：' + (e && e.message ? e.message : '未知错误'), 'error');
@@ -885,19 +1057,135 @@
         }
       });
     }
+
+    // 强制下载：先比对变化幅度，超过 20% 时要求确认
     if ($('#btnSyncDownload')) {
       $('#btnSyncDownload').addEventListener('click', async () => {
-        const filename = settings.sync && settings.sync.filename ? settings.sync.filename : 'ggbookmark-config.json';
+        const filename = syncFilename();
         try {
+          // 先检查远端状态与变化幅度
+          let needConfirm = false;
+          let info = null;
+          try {
+            const st = await GG.Sync.checkStatus();
+            if (st && st.info && st.info.diff && st.info.diff.big) {
+              needConfirm = true;
+              info = st.info;
+            }
+          } catch (e) { /* 状态检查失败时仍按原逻辑直接下载 */ }
+          if (needConfirm) {
+            const choice = await showConflictModal(info, true);
+            if (choice !== 'remote') { GG.toast.show('已取消下载', 'info'); return; }
+          }
           await GG.Sync.download();
           if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '手动', target: 'webdav', filename, ok: true, msg: '下载并应用成功' }).catch(() => {});
-          GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
           GG.toast.show('已从服务器下载并应用', 'success');
+          await afterDownloaded();
           renderSyncLogs();
+          refreshSyncStatus();
         } catch (e) {
           if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '手动', target: 'webdav', filename, ok: false, msg: '下载失败：' + (e && e.message ? e.message : '未知错误') }).catch(() => {});
           GG.toast.show('下载失败：' + (e && e.message ? e.message : '未知错误'), 'error');
           renderSyncLogs();
+        }
+      });
+    }
+
+    // 检查同步状态：显示 本地较新 / 远端较新 / 已同步 / 冲突
+    if ($('#btnSyncCheck')) {
+      $('#btnSyncCheck').addEventListener('click', async () => {
+        const el = document.getElementById('syncRemoteState');
+        if (el) { el.className = 'v'; el.textContent = '检查中…'; }
+        try {
+          const st = await GG.Sync.checkStatus();
+          if (!el) return;
+          if (st.status === 'no-server') { el.textContent = '未配置服务器'; return; }
+          if (st.status === 'no-remote') { el.textContent = '远端尚无配置文件（首次同步将上传）'; return; }
+          const map = {
+            'in-sync': '本地与远端已同步',
+            'local-newer': '本地较新（下次同步将上传）',
+            'remote-newer': '远端较新（下次同步将下载）',
+            'conflict': '本地与远端均有修改（冲突）'
+          };
+          el.textContent = map[st.status] || st.status;
+          el.className = 'v' + (st.status === 'conflict' ? ' conflict' : st.status === 'in-sync' ? '' : ' warn');
+          if (st.status === 'conflict') {
+            const choice = await showConflictModal(st.info, false);
+            if (choice === 'local') {
+              await GG.Sync.resolveConflict('local');
+              GG.toast.show('已保留本地并上传', 'success');
+              el.className = 'v'; el.textContent = '已解决（本地已上传）';
+              renderSyncLogs(); refreshSyncStatus();
+            } else if (choice === 'remote') {
+              await GG.Sync.resolveConflict('remote');
+              GG.toast.show('已下载远端配置并应用', 'success');
+              await afterDownloaded();
+              renderSyncLogs(); refreshSyncStatus();
+            }
+          }
+        } catch (e) {
+          if (el) { el.className = 'v conflict'; el.textContent = '检查失败：' + (e && e.message ? e.message : '未知错误'); }
+        }
+      });
+    }
+
+    // 历史版本：列出服务器上的版本备份（含时间与书签数量），可选择下载恢复
+    if ($('#btnListVersions')) {
+      $('#btnListVersions').addEventListener('click', async () => {
+        const box = document.getElementById('versionList');
+        if (!box) return;
+        box.innerHTML = '<div class="version-empty">正在读取版本列表…</div>';
+        try {
+          const versions = await GG.Sync.listVersions();
+          if (!versions.length) {
+            box.innerHTML = '<div class="version-empty">暂无版本备份（开启“版本化备份”后自动保留）</div>';
+            return;
+          }
+          box.innerHTML = '';
+          versions.forEach((v) => {
+            const item = document.createElement('div');
+            item.className = 'version-item';
+            const time = document.createElement('span');
+            time.className = 'v-time';
+            time.textContent = fmtTime(v.time);
+            const count = document.createElement('span');
+            count.className = 'v-count loading';
+            count.textContent = '读取中…';
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.textContent = '下载此版本';
+            btn.addEventListener('click', async () => {
+              try {
+                const cfgData = await GG.Sync.downloadVersion(null, v.name);
+                const applied = await GG.Sync.applyConfig(cfgData);
+                if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '版本恢复', target: 'webdav', filename: v.name, ok: true, msg: '已恢复历史版本' }).catch(() => {});
+                GG.toast.show('已恢复版本：' + v.name, 'success');
+                await afterDownloaded();
+                renderSyncLogs();
+                refreshSyncStatus();
+              } catch (e) {
+                if (GG.Sync.log) GG.Sync.log({ type: 'download', source: '版本恢复', target: 'webdav', filename: v.name, ok: false, msg: '恢复失败：' + (e && e.message ? e.message : '未知错误') }).catch(() => {});
+                GG.toast.show('恢复失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+              }
+            });
+            item.appendChild(time);
+            item.appendChild(count);
+            item.appendChild(btn);
+            box.appendChild(item);
+            // 异步补充书签数量（读取该版本文件头部的统计字段）
+            GG.Sync.downloadVersion(null, v.name).then((cfgData) => {
+              const cnt = cfgData && cfgData.bookmarkCount != null
+                ? cfgData.bookmarkCount
+                : (GG.Sync.countBookmarksInConfig ? GG.Sync.countBookmarksInConfig(cfgData).bookmarkCount : null);
+              count.classList.remove('loading');
+              count.textContent = cnt != null ? (cnt + ' 个书签') : '';
+            }).catch(() => {
+              count.classList.remove('loading');
+              count.textContent = v.size != null ? (Math.round(v.size / 1024) + ' KB') : '';
+            });
+          });
+        } catch (e) {
+          box.innerHTML = '<div class="version-empty">读取失败：' + escapeHtml(e && e.message ? e.message : '未知错误') + '</div>';
         }
       });
     }
@@ -953,6 +1241,10 @@
       if (changes && 'syncLogs' in changes) {
         if (logTimer) clearTimeout(logTimer);
         logTimer = setTimeout(() => { logTimer = null; renderSyncLogs(); }, 300);
+      }
+      // 后台自动同步写入的状态（上次成功时间 / 冲突）实时刷新
+      if (changes && 'syncState' in changes) {
+        refreshSyncStatus();
       }
     });
   }
