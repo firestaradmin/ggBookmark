@@ -907,7 +907,7 @@ html[data-theme="light"] .view-menu { background: rgba(250, 251, 255, 0.9); }
 .nt-settings {
   position: fixed;
   top: 0; right: 0; bottom: 0;
-  width: 360px;
+  width: 460px;
   max-width: 92vw;
   background: var(--bg-base);
   border-left: 1px solid var(--glass-border);

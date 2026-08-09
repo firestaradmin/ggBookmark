@@ -126,7 +126,7 @@
     const s = state.settings;
     const blur = (typeof s.glassBlur === 'number' && s.glassBlur >= 0) ? s.glassBlur : 20;
     const op = (typeof s.glassOpacity === 'number' && s.glassOpacity >= 0 && s.glassOpacity <= 1) ? s.glassOpacity : 0.06;
-    let color = s.glassColor || '#ffffff';
+    let color = s.glassColor || '#ffeec2';
     // 解析颜色为 rgb
     let r = 255, g = 255, b = 255;
     if (/^#([0-9a-f]{6})$/i.test(color)) {
@@ -196,6 +196,32 @@
   // 根据同步模式触发上传（由设置/书签变更事件调用）
   let syncTimer = null;
   const SYNC_SOURCE = { settingsChange: '设置更改', bookmarkChange: '书签变更', interval: '定时同步' };
+
+  // 同步引擎自动维护的元数据字段——它们的变化不代表用户真正修改了设置，不应触发「设置更改时」同步。
+  const SYNC_META_KEYS = ['lastSyncAt', 'lastLocalChangeAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion'];
+  // 比较两份设置，忽略同步元数据字段，判断实质内容是否变化。
+  function settingsSubstantiallyChanged(prev, next) {
+    // 两边都用默认值补齐，避免因默认值字段差异导致误判
+    prev = Object.assign({}, GG.DEFAULTS, prev || {});
+    next = Object.assign({}, GG.DEFAULTS, next || {});
+    const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+    for (const k of keys) {
+      if (SYNC_META_KEYS.includes(k)) continue;
+      const a = prev[k];
+      const b = next[k];
+      if (k === 'sync') {
+        // 同步配置单独比较（密码等可能变动，仍视为设置更改）
+        if (JSON.stringify(a || {}) !== JSON.stringify(b || {})) return true;
+        continue;
+      }
+      // 简单值 / 数组 / 对象的浅序列化比较
+      const sa = (typeof a === 'object' && a !== null) ? JSON.stringify(a) : String(a);
+      const sb = (typeof b === 'object' && b !== null) ? JSON.stringify(b) : String(b);
+      if (sa !== sb) return true;
+    }
+    return false;
+  }
+
   function maybeSync(mode) {
     if (!GG.Sync) return;
     const raw = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
@@ -229,7 +255,8 @@
         GG.toast.show((source ? source + '：' : '') + '远端较新，已下载并应用', 'success');
         reloadAndRender();
       } else if (r.action === 'in-sync') {
-        // 已是最新，静默跳过
+        // 已是最新：给出轻量提示，避免用户误以为同步没有触发
+        GG.toast.show((source ? source + '：' : '') + '本地与远端已是最新', 'info');
       } else if (r.action === 'conflict' || r.action === 'big-change') {
         const what = r.action === 'conflict' ? '本地与远端均有修改（冲突）' : '远端变更超过 20%';
         if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'other', ok: false, msg: what + '，请到设置页处理' })).catch(() => {});
@@ -2236,20 +2263,29 @@
       if (area !== 'local') return;
       const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat'].some((k) => k in changes);
       if (changes.settings) {
-        const prevCols = state.settings.cardCols;
-        const prevMinW = state.settings.cardMinWidth;
-        const prevFavicon = state.settings && state.settings.faviconSource;
-        state.settings = Object.assign({}, GG.DEFAULTS, changes.settings.newValue || {});
+        const prevSettings = state.settings;
+        const nextSettings = changes.settings.newValue || {};
+        const substantive = settingsSubstantiallyChanged(prevSettings, nextSettings);
+        state.settings = Object.assign({}, GG.DEFAULTS, nextSettings);
         window.__ggSettings = state.settings;
-        applyBg();
-        renderSearchEngine();
-        syncViewBtn();
-        syncViewMenu();
-        applyCardCols(); // 应用固定列数与最小宽度
-        if (prevCols !== state.settings.cardCols || prevMinW !== state.settings.cardMinWidth) renderCards();
-        else if (prevFavicon !== state.settings.faviconSource) renderCards(); // 图标来源变化需重绘
-        else renderCards(); // refresh compact state from global setting
-        maybeSync('settingsChange');
+        // 仅在实质内容变化时才重渲染 UI 与触发同步；
+        // 同步引擎自动写入的元数据字段（lastSyncAt / lastLocalChangeAt / lastRemoteModified /
+        // lastSyncedFingerprint / configVersion）变化时既不重绘也不触发同步，
+        // 避免书签更改或同步完成后产生多余的渲染与重复同步。
+        if (substantive) {
+          const prevCols = prevSettings.cardCols;
+          const prevMinW = prevSettings.cardMinWidth;
+          const prevFavicon = prevSettings && prevSettings.faviconSource;
+          applyBg();
+          renderSearchEngine();
+          syncViewBtn();
+          syncViewMenu();
+          applyCardCols(); // 应用固定列数与最小宽度
+          if (prevCols !== state.settings.cardCols || prevMinW !== state.settings.cardMinWidth) renderCards();
+          else if (prevFavicon !== state.settings.faviconSource) renderCards(); // 图标来源变化需重绘
+          else renderCards(); // refresh compact state from global setting
+          maybeSync('settingsChange');
+        }
       }
       if (cardsChanged) {
         // 拖拽高度等局部操作触发的保存，不重渲染整树，避免重置卡片状态

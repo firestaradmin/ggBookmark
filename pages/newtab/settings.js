@@ -3,6 +3,8 @@
 (() => {
   'use strict';
   const ACCENTS = ['#4f7cff', '#7a5bff', '#00c6a7', '#ff7a59', '#f54d6a', '#ffb84d', '#4f9fff'];
+  // 卡片背景预设色：黑白灰基础色 + 多色系淡色（共 8 个）
+  const GLASS_COLORS = ['#ffffff', '#e8ecf5', '#8b93a8', '#0c1220', '#dbe7ff', '#ffd9d9', '#dff3e3', '#ffeec2'];
   const $ = (s) => document.querySelector(s);
   let settings = {};
   const PRESET_WALLPAPERS = [
@@ -133,10 +135,13 @@
   }
   // 磨砂玻璃滑块实时预览：更新显示值并写入 CSS 变量（即时生效）
   function applyGlassPreview() {
-    const color = $('#glassColor').value || '#0c1220';
+    const color = $('#glassColor').value || '#ffeec2';
     const blur = Number($('#glassBlur').value) || 0;
     const op = Number($('#glassOpacity').value);
-    $('#glassColorVal').textContent = color;
+    const hexEl = $('#glassColorHex');
+    if (hexEl && document.activeElement !== hexEl) hexEl.value = color;
+    const swatch = $('#ccSwatch');
+    if (swatch) swatch.style.background = color;
     $('#glassBlurVal').textContent = blur + 'px';
     $('#glassOpacityVal').textContent = op.toFixed(2);
     const r = parseInt(color.slice(1, 3), 16);
@@ -144,7 +149,266 @@
     const b = parseInt(color.slice(5, 7), 16);
     document.documentElement.style.setProperty('--glass-blur', blur + 'px');
     document.documentElement.style.setProperty('--panel-bg', `rgba(${r}, ${g}, ${b}, ${op})`);
+    // 同步预设色选中态：匹配则高亮对应圆点，否则取消全部选中
+    const dots = document.querySelectorAll('#glassColors .color-dot');
+    if (dots.length) {
+      const cl = color.toLowerCase();
+      let matched = false;
+      dots.forEach((x) => {
+        const hit = x.dataset.color.toLowerCase() === cl;
+        x.classList.toggle('active', hit);
+        if (hit) matched = true;
+      });
+      if (!matched) dots.forEach((x) => x.classList.remove('active'));
+    }
   }
+
+  // 规范化 hex：支持 #fff / fff / #ffffff / ffffff，非法返回 null
+  function normalizeHex(v) {
+    let s = (v || '').trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(s)) {
+      s = s.split('').map((c) => c + c).join('');
+    }
+    if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
+    return '#' + s.toLowerCase();
+  }
+
+  // ---------- HSL / RGB / HEX 转换（用于自定义取色器） ----------
+  function hexToRgb(hex) {
+    const n = normalizeHex(hex);
+    if (!n) return null;
+    return {
+      r: parseInt(n.slice(1, 3), 16),
+      g: parseInt(n.slice(3, 5), 16),
+      b: parseInt(n.slice(5, 7), 16)
+    };
+  }
+  function rgbToHex(r, g, b) {
+    const h = (x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0');
+    return '#' + h(r) + h(g) + h(b);
+  }
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    const d = max - min;
+    if (d !== 0) {
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        default: h = (r - g) / d + 4;
+      }
+      h *= 60;
+    }
+    return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+  function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360;
+    s = Math.max(0, Math.min(100, s)) / 100;
+    l = Math.max(0, Math.min(100, l)) / 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; }
+    else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; }
+    else { r = c; b = x; }
+    return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
+  }
+
+  // ---------- 自定义颜色选择器（RGB 圆形取色） ----------
+  let cpState = { h: 0, s: 100, l: 50, hex: '#ffffff' };
+  let cpActive = false; // 是否为“拖动中”，避免鼠标事件竞争
+
+  function openColorPicker(hex) {
+    const ov = $('#cpOverlay');
+    if (!ov) return;
+    cpState.hex = normalizeHex(hex) || '#ffffff';
+    const rgb = hexToRgb(cpState.hex) || { r: 255, g: 255, b: 255 };
+    Object.assign(cpState, rgbToHsl(rgb.r, rgb.g, rgb.b));
+    ov.classList.remove('hidden');
+    // 等一帧让元素可见后再定位指针（隐藏时 offsetWidth 为 0）
+    requestAnimationFrame(() => {
+      renderCpWheel();
+      renderCpSv();
+      renderCpFields();
+    });
+  }
+  function closeColorPicker() {
+    const ov = $('#cpOverlay');
+    if (ov) ov.classList.add('hidden');
+  }
+  // 根据车轮事件位置计算 hue（0-360）
+  function hueFromEvent(e, el) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    let ang = Math.atan2(dy, dx) * 180 / Math.PI; // -180..180
+    if (ang < 0) ang += 360;
+    return Math.round(ang);
+  }
+  // 根据 SV 区域事件位置计算 sat/light（0-100）
+  function svFromEvent(e, el) {
+    const rect = el.getBoundingClientRect();
+    let x = (e.clientX - rect.left) / rect.width;
+    let y = (e.clientY - rect.top) / rect.height;
+    x = Math.max(0, Math.min(1, x));
+    y = Math.max(0, Math.min(1, y));
+    return { s: Math.round(x * 100), l: Math.round((1 - y) * 100) };
+  }
+  // 渲染圆环 + hue 指针
+  function renderCpWheel() {
+    const dot = $('#cpWheelDot');
+    if (!dot) return;
+    const wrap = $('#cpWheelWrap') || dot.parentElement;
+    const size = wrap.offsetWidth || 200;
+    const rad = (size / 2) * 0.7;
+    const ang = cpState.h * Math.PI / 180;
+    const cx = size / 2, cy = size / 2;
+    const px = cx + rad * Math.cos(ang);
+    const py = cy + rad * Math.sin(ang);
+    dot.style.left = px + 'px';
+    dot.style.top = py + 'px';
+  }
+  // 渲染 SV 区域 + 指针，并更新 --cp-h
+  function renderCpSv() {
+    const sv = $('#cpSv');
+    const dot = $('#cpSvDot');
+    if (sv) sv.style.setProperty('--cp-h', cpState.h + 'deg');
+    if (dot && dot.parentElement) {
+      const wrap = dot.parentElement;
+      const w = wrap.offsetWidth || 200;
+      const h = wrap.offsetHeight || 120;
+      dot.style.left = (cpState.s / 100 * w) + 'px';
+      dot.style.top = ((1 - cpState.l / 100) * h) + 'px';
+    }
+  }
+  // 渲染数字字段
+  function renderCpFields() {
+    const hEl = $('#cpH'), sEl = $('#cpS'), lEl = $('#cpL'), hexEl = $('#cpHex');
+    if (hEl) hEl.value = cpState.h;
+    if (sEl) sEl.value = cpState.s;
+    if (lEl) lEl.value = cpState.l;
+    if (hexEl) hexEl.value = cpState.hex;
+  }
+  // 将 cpState 应用为当前卡片背景色（实时预览）
+  function applyCpToGlass() {
+    const { r, g, b } = hslToRgb(cpState.h, cpState.s, cpState.l);
+    cpState.hex = rgbToHex(r, g, b);
+    const input = $('#glassColor');
+    if (input) input.value = cpState.hex;
+    const hexInput = $('#glassColorHex');
+    if (hexInput) hexInput.value = cpState.hex;
+    applyGlassPreview();
+    const swatch = $('#ccSwatch');
+    if (swatch) swatch.style.background = cpState.hex;
+    renderCpFields();
+  }
+  // 根据 hex 更新 cpState 并重绘
+  function setCpFromHex(hex) {
+    const n = normalizeHex(hex);
+    if (!n) return false;
+    const rgb = hexToRgb(n);
+    Object.assign(cpState, rgbToHsl(rgb.r, rgb.g, rgb.b));
+    cpState.hex = n;
+    renderCpWheel();
+    renderCpSv();
+    renderCpFields();
+    return true;
+  }
+  function wireColorPicker() {
+    const ov = $('#cpOverlay');
+    const swatch = $('#ccSwatch');
+    if (!ov) return;
+
+    // 打开
+    swatch.addEventListener('click', () => {
+      const cur = $('#glassColor') ? $('#glassColor').value : '#ffeec2';
+      openColorPicker(cur);
+    });
+    // 关闭
+    $('#cpClose').addEventListener('click', closeColorPicker);
+    $('#cpCancel').addEventListener('click', () => {
+      // 取消：回填初始色
+      setCpFromHex(cpState.hex);
+      closeColorPicker();
+    });
+    $('#cpOk').addEventListener('click', () => {
+      applyCpToGlass();
+      closeColorPicker();
+    });
+    ov.addEventListener('click', (e) => { if (e.target === ov) closeColorPicker(); });
+    // Esc 关闭
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ov.classList.contains('hidden')) closeColorPicker(); });
+    // 窗口尺寸变化时重绘指针位置
+    window.addEventListener('resize', () => {
+      if (!ov.classList.contains('hidden')) { renderCpWheel(); renderCpSv(); }
+    });
+
+    // 圆环取 hue
+    const wheel = $('#cpWheel');
+    wheel.addEventListener('mousedown', (e) => {
+      cpActive = true;
+      cpLastTarget = 'wheel';
+      cpState.h = hueFromEvent(e, wheel);
+      renderCpWheel(); renderCpSv(); renderCpFields(); applyCpToGlass();
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!cpActive || cpLastTarget !== 'wheel') return;
+      if (!ov.classList.contains('hidden')) {
+        cpState.h = hueFromEvent(e, wheel);
+        renderCpWheel(); renderCpSv(); renderCpFields(); applyCpToGlass();
+      }
+    });
+    document.addEventListener('mouseup', () => { cpActive = false; cpLastTarget = null; });
+
+    // SV 区域取 sat/light
+    const svWrap = $('#cpSvWrap');
+    svWrap.addEventListener('mousedown', (e) => {
+      cpActive = true;
+      cpLastTarget = 'sv';
+      Object.assign(cpState, svFromEvent(e, svWrap));
+      renderCpSv(); renderCpFields(); applyCpToGlass();
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!cpActive || cpLastTarget !== 'sv') return;
+      if (!ov.classList.contains('hidden')) {
+        Object.assign(cpState, svFromEvent(e, svWrap));
+        renderCpSv(); renderCpFields(); applyCpToGlass();
+      }
+    });
+
+    // 数字字段输入
+    const bindNum = (el, key) => {
+      el.addEventListener('input', () => {
+        let v = Number(el.value);
+        if (isNaN(v)) return;
+        if (key === 'h') cpState.h = ((v % 360) + 360) % 360;
+        else if (key === 's') cpState.s = Math.max(0, Math.min(100, v));
+        else cpState.l = Math.max(0, Math.min(100, v));
+        renderCpWheel(); renderCpSv(); applyCpToGlass();
+      });
+    };
+    if ($('#cpH')) bindNum($('#cpH'), 'h');
+    if ($('#cpS')) bindNum($('#cpS'), 's');
+    if ($('#cpL')) bindNum($('#cpL'), 'l');
+    if ($('#cpHex')) {
+      $('#cpHex').addEventListener('input', () => {
+        if (setCpFromHex($('#cpHex').value)) applyCpToGlass();
+      });
+    }
+  }
+  let cpLastTarget = null; // 'wheel' | 'sv' | null，区分拖动来源
+
 
   function buildSeSelect() {
     const sel = $('#seSelect');
@@ -171,6 +435,28 @@
         d.classList.add('active');
         document.documentElement.style.setProperty('--accent', color);
         document.documentElement.style.setProperty('--accent-2', color);
+      });
+      c.appendChild(d);
+    });
+  }
+
+  // 卡片背景预设色：点击即应用并写回输入框 / 实时预览，与主题色交互一致
+  function buildGlassColors() {
+    const c = $('#glassColors');
+    if (!c) return;
+    c.innerHTML = '';
+    GLASS_COLORS.forEach((color) => {
+      const d = document.createElement('span');
+      d.className = 'color-dot';
+      d.style.background = color;
+      d.dataset.color = color;
+      if (color.toLowerCase() === (settings.glassColor || '').toLowerCase()) d.classList.add('active');
+      d.addEventListener('click', () => {
+        c.querySelectorAll('.color-dot').forEach((x) => x.classList.remove('active'));
+        d.classList.add('active');
+        const input = $('#glassColor');
+        if (input) input.value = color;
+        applyGlassPreview();
       });
       c.appendChild(d);
     });
@@ -450,16 +736,16 @@
     $('#bgDim').value = settings.backgroundDim ?? 0.15;
     $('#cardCols').value = settings.cardCols || 3;
     $('#cardMinWidth').value = settings.cardMinWidth || 320;
-    $('#glassColor').value = settings.glassColor || '#ffffff';
+    $('#glassColor').value = settings.glassColor || '#ffeec2';
     $('#glassBlur').value = settings.glassBlur ?? 20;
     $('#glassOpacity').value = settings.glassOpacity ?? 0.06;
     applyGlassPreview();
     buildSeSelect();
     $('#seSelect').value = settings.searchEngine || 'bing';
-    $('#showDesc').checked = settings.showDescriptions !== false;
     $('#fontSize').value = settings.fontSize || 'medium';
     if ($('#faviconSource')) $('#faviconSource').value = settings.faviconSource || GG.DEFAULTS.faviconSource;
     buildColors();
+    buildGlassColors();
     buildPresets();
     buildImportFolderSelect();
     document.documentElement.style.setProperty('--accent', settings.accentColor);
@@ -732,6 +1018,36 @@
     $('#glassColor').addEventListener('input', applyGlassPreview);
     $('#glassBlur').addEventListener('input', applyGlassPreview);
     $('#glassOpacity').addEventListener('input', applyGlassPreview);
+    // 自定义颜色 hex 输入：边输入边校验（合法则实时应用），失焦时回填规范化值
+    const glassHex = $('#glassColorHex');
+    if (glassHex) {
+      glassHex.addEventListener('input', () => {
+        const n = normalizeHex(glassHex.value);
+        glassHex.classList.toggle('invalid', !!glassHex.value && !n);
+        if (n) {
+          const colorInput = $('#glassColor');
+          if (colorInput && colorInput.value !== n) colorInput.value = n;
+          applyGlassPreview();
+        }
+      });
+      glassHex.addEventListener('blur', () => {
+        const n = normalizeHex(glassHex.value);
+        if (n) {
+          glassHex.value = n;
+          const colorInput = $('#glassColor');
+          if (colorInput) colorInput.value = n;
+          applyGlassPreview();
+        }
+        glassHex.classList.remove('invalid');
+      });
+      glassHex.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const n = normalizeHex(glassHex.value);
+          if (n) { glassHex.value = n; $('#glassColor').value = n; applyGlassPreview(); }
+          glassHex.blur();
+        }
+      });
+    }
 
     $('#btnSave').addEventListener('click', async () => {
       const bgActive = document.querySelector('.seg-btn[data-bg].active');
@@ -747,11 +1063,10 @@
       settings.backgroundDim = Number($('#bgDim').value) || 0;
       settings.cardCols = Number($('#cardCols').value) || 5;
       settings.cardMinWidth = Number($('#cardMinWidth').value) || 280;
-      settings.glassColor = $('#glassColor').value || '#0c1220';
+      settings.glassColor = $('#glassColor').value || '#ffeec2';
       settings.glassBlur = Number($('#glassBlur').value) || 0;
       settings.glassOpacity = Number($('#glassOpacity').value);
       settings.searchEngine = $('#seSelect').value;
-      settings.showDescriptions = $('#showDesc').checked;
       settings.fontSize = $('#fontSize').value;
       settings.faviconSource = $('#faviconSource') ? $('#faviconSource').value : GG.DEFAULTS.faviconSource;
       settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
@@ -764,8 +1079,8 @@
       }
       const activeDot = document.querySelector('.color-dot.active');
       if (activeDot) settings.accentColor = activeDot.dataset.color;
-      // 记录本地变更时间，供同步冲突判定（保留已有的同步元数据字段）
-      settings.lastLocalChangeAt = Date.now();
+      // 记录本地变更时间，供同步冲突判定；确保严格大于上次同步点，避免同毫秒误判
+      settings.lastLocalChangeAt = Math.max(Date.now(), (settings.lastSyncAt || 0) + 1);
       await GG.saveSettings(settings);
       if (GG.Sync && GG.Sync.scheduleAlarm) GG.Sync.scheduleAlarm();
       refreshSyncStatus();
@@ -1250,4 +1565,99 @@
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  // ---------- 设置分类标签切换 ----------
+  function wireTabs() {
+    const tabs = document.querySelectorAll('.s-tab');
+    const panels = document.querySelectorAll('.s-panel');
+    if (!tabs.length || !panels.length) return;
+    function show(panelName) {
+      tabs.forEach((t) => t.classList.toggle('active', t.dataset.panel === panelName));
+      panels.forEach((p) => {
+        const show = p.dataset.panel === panelName;
+        p.style.display = show ? '' : 'none';
+        // 切到「关于」时填充版本号
+        if (show && p.dataset.panel === 'about') fillAbout();
+        if (show && p.dataset.panel === 'update') fillUpdateVersion();
+      });
+    }
+    tabs.forEach((t) => {
+      t.addEventListener('click', () => show(t.dataset.panel));
+    });
+  }
+
+  // 关于面板：填充版本号
+  function fillAbout() {
+    const el = document.getElementById('aboutVersion');
+    if (el) {
+      try { el.textContent = chrome.runtime.getManifest().version || ''; } catch (e) { el.textContent = ''; }
+    }
+  }
+
+  // 更新检查面板：填充当前版本
+  function fillUpdateVersion() {
+    const el = document.getElementById('updateCurrentVersion');
+    if (el) {
+      try { el.textContent = 'v' + (chrome.runtime.getManifest().version || ''); } catch (e) { el.textContent = '—'; }
+    }
+  }
+
+  // 检查 GitHub 最新发布版本
+  async function checkUpdate() {
+    const latestEl = document.getElementById('updateLatestVersion');
+    const btn = document.getElementById('btnCheckUpdate');
+    const releaseBtn = document.getElementById('btnOpenRelease');
+    const hint = document.getElementById('updateHint');
+    if (!latestEl) return;
+    if (btn) btn.disabled = true;
+    latestEl.textContent = '检查中…';
+    if (hint) hint.textContent = '正在连接 GitHub…';
+    try {
+      const cur = (chrome.runtime && chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
+      const res = await fetch('https://api.github.com/repos/firestaradmin/ggBookmark/releases/latest');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const latest = (data && data.tag_name) || '';
+      const latestVer = latest.replace(/^v/, '');
+      latestEl.textContent = latest ? 'v' + latestVer : '—';
+      const isNewer = latestVer && cur && compareVersions(latestVer, cur) > 0;
+      if (hint) {
+        hint.textContent = isNewer
+          ? '发现新版本 v' + latestVer + '，可前往更新页面下载。'
+          : '已是最新版本。';
+        hint.style.color = isNewer ? 'var(--accent)' : 'var(--text-faint)';
+      }
+      if (releaseBtn) {
+        releaseBtn.style.display = isNewer ? '' : 'none';
+        if (data.html_url) {
+          releaseBtn.onclick = () => { GG.api.tabs.create({ url: data.html_url }); };
+        }
+      }
+    } catch (e) {
+      latestEl.textContent = '检查失败';
+      if (hint) { hint.textContent = '无法连接 GitHub：' + (e && e.message ? e.message : '未知错误'); hint.style.color = '#ff7a7a'; }
+      if (releaseBtn) releaseBtn.style.display = 'none';
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+  function compareVersions(a, b) {
+    const pa = a.split('.').map(Number);
+    const pb = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const x = pa[i] || 0, y = pb[i] || 0;
+      if (x !== y) return x - y;
+    }
+    return 0;
+  }
+
+  // 在 DOMContentLoaded 之后再接入标签与更新检查（保持原有 init 行为）
+  document.addEventListener('DOMContentLoaded', () => {
+    wireTabs();
+    const btnCheck = document.getElementById('btnCheckUpdate');
+    if (btnCheck) btnCheck.addEventListener('click', checkUpdate);
+    const btnHelp = document.getElementById('btnOpenHelp');
+    if (btnHelp) btnHelp.addEventListener('click', () => { GG.api.tabs.create({ url: chrome.runtime.getURL('pages/help/help.html') }); });
+    wireColorPicker();
+  });
 })();

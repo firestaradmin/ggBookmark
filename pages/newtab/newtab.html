@@ -127,10 +127,18 @@
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
+    <!-- 设置分类标签（独立卡片） -->
+    <div class="s-tabs" id="sTabs">
+      <button class="s-tab active" data-panel="appearance">外观设置</button>
+      <button class="s-tab" data-panel="dataSync">数据与同步</button>
+      <button class="s-tab" data-panel="other">其他</button>
+      <button class="s-tab" data-panel="update">更新检查</button>
+      <button class="s-tab" data-panel="about">关于</button>
+    </div>
     <div class="s-body">
-      <div class="shell glass">
+      <div class="shell glass s-panel" data-panel="appearance">
         <section class="group">
-          <h2>背景</h2>
+          <h2>主图设置</h2>
           <div class="field">
             <span class="f-title">背景风格</span>
             <div class="seg">
@@ -170,15 +178,7 @@
         </section>
 
         <section class="group">
-          <h2>搜索</h2>
-          <div class="field">
-            <span class="f-title">默认搜索引擎</span>
-            <select id="seSelect"></select>
-          </div>
-        </section>
-
-        <section class="group">
-          <h2>外观</h2>
+          <h2>卡片设置</h2>
           <div class="field">
             <span class="f-title">主题模式</span>
             <div class="seg">
@@ -208,10 +208,19 @@
             <span class="range-val" id="cardMinWidthVal">280px</span>
           </div>
           <div class="hint">固定列数不随窗口宽度变化；当窗口放不下时出现横向滚动条。</div>
-          <div class="field">
+        </section>
+
+        <section class="group">
+          <h2>卡片背景设置</h2>
+          <div class="field col">
             <span class="f-title">背景颜色</span>
-            <input id="glassColor" type="color" value="#ffffff">
-            <span class="range-val" id="glassColorVal">#ffffff</span>
+            <div class="colors" id="glassColors"></div>
+            <div class="color-custom">
+              <label class="cc-label" for="glassColorHex">自定义</label>
+              <button class="cc-swatch" id="ccSwatch" type="button" title="打开颜色选择器"></button>
+              <input id="glassColorHex" class="hex-input" type="text" value="#ffeec2" spellcheck="false" autocomplete="off" title="直接输入十六进制颜色值，如 #ffeec2">
+              <input id="glassColor" type="hidden" value="#ffeec2">
+            </div>
           </div>
           <div class="field">
             <span class="f-title">磨砂模糊</span>
@@ -224,10 +233,10 @@
             <span class="range-val" id="glassOpacityVal">0.06</span>
           </div>
           <div class="hint" id="glassHint">背景颜色作用于顶部工具栏、卡片与置顶行；模糊控制磨砂程度；透明度越低越透出背景（调 0 即全透明）。</div>
-          <div class="field">
-            <span class="f-title">卡片描述</span>
-            <label class="cb"><input type="checkbox" id="showDesc" checked> 显示网站描述（域名）</label>
-          </div>
+        </section>
+
+        <section class="group">
+          <h2>字体设置</h2>
           <div class="field">
             <span class="f-title">字体大小</span>
             <select id="fontSize">
@@ -236,18 +245,10 @@
               <option value="large">大</option>
             </select>
           </div>
-          <div class="field">
-            <span class="f-title">书签图标来源</span>
-            <select id="faviconSource">
-              <option value="faviconsnap">FaviconSnap</option>
-              <option value="duckduckgo">DuckDuckGo</option>
-              <option value="google">Google</option>
-              <option value="local">本地首字母</option>
-            </select>
-            <div class="hint">图标按域名从对应服务获取；获取失败或选择“本地首字母”时，显示书签标题首字母。</div>
-          </div>
         </section>
+      </div><!-- /外观设置 -->
 
+      <div class="shell glass s-panel" data-panel="dataSync" style="display:none">
           <section class="group">
             <h2>数据</h2>
             <div class="field col">
@@ -262,9 +263,9 @@
               <button class="btn" id="btnExport">导出配置</button>
               <button class="btn" id="btnImport">导入配置</button>
               <input type="file" id="importFile" accept="application/json,.json" style="display:none">
-              <button class="btn danger" id="btnClear">清除配置</button>
+              <button class="btn danger" id="btnClear">清除全部配置</button>
             </div>
-            <div class="hint">导出为 JSON 文件备份；导入会覆盖当前设置；清除会恢复全部默认并删除本地配置。</div>
+            <div class="hint">导出为 JSON 文件备份；导入会覆盖当前设置；清除会恢复全部默认并删除全部本地配置（卡片、壁纸、设置），不会删除浏览器书签。</div>
           </section>
 
           <section class="group">
@@ -346,6 +347,75 @@
             </div>
             <div class="sync-log" id="syncLogs"></div>
           </section>
+      </div><!-- /数据与同步 -->
+
+      <div class="shell glass s-panel" data-panel="other" style="display:none">
+        <section class="group">
+          <h2>搜索</h2>
+          <div class="field">
+            <span class="f-title">默认搜索引擎</span>
+            <select id="seSelect"></select>
+          </div>
+        </section>
+        <section class="group">
+          <h2>书签图标</h2>
+          <div class="field">
+            <span class="f-title">图标来源</span>
+            <select id="faviconSource">
+              <option value="faviconsnap">FaviconSnap</option>
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="google">Google</option>
+              <option value="local">本地首字母</option>
+            </select>
+            <div class="hint">图标按域名从对应服务获取；获取失败或选择“本地首字母”时，显示书签标题首字母。</div>
+          </div>
+        </section>
+      </div><!-- /其他 -->
+
+      <div class="shell glass s-panel" data-panel="update" style="display:none">
+        <section class="group">
+          <h2>更新检查</h2>
+          <div class="field col">
+            <span class="f-title">当前版本</span>
+            <span class="v" id="updateCurrentVersion">—</span>
+          </div>
+          <div class="field col">
+            <span class="f-title">最新版本</span>
+            <span class="v" id="updateLatestVersion">—</span>
+          </div>
+          <div class="field actions">
+            <button class="btn primary" id="btnCheckUpdate">检查更新</button>
+            <button class="btn" id="btnOpenRelease" style="display:none">前往更新页面</button>
+          </div>
+          <div class="hint" id="updateHint">检查 GitHub 仓库是否有新版本发布。</div>
+        </section>
+      </div><!-- /更新检查 -->
+
+      <div class="shell glass s-panel" data-panel="about" style="display:none">
+        <section class="group">
+          <h2>关于</h2>
+          <div class="field">
+            <span class="f-title">版本</span>
+            <span class="v">v<span id="aboutVersion">—</span></span>
+          </div>
+          <div class="field">
+            <span class="f-title">作者</span>
+            <span class="v">@firestaradmin</span>
+          </div>
+          <div class="field">
+            <span class="f-title">仓库</span>
+            <a class="v link" id="aboutRepo" href="https://github.com/firestaradmin/ggBookmark" target="_blank" rel="noopener">github.com/firestaradmin/ggBookmark</a>
+          </div>
+          <div class="field">
+            <span class="f-title">帮助</span>
+            <button class="btn" id="btnOpenHelp">查看使用说明</button>
+          </div>
+          <div class="field">
+            <span class="f-title">隐私</span>
+            <span class="v">数据保存在本地；仅当启用 WebDAV 同步时才会将配置上传到你指定的服务器。</span>
+          </div>
+        </section>
+      </div><!-- /关于 -->
 
       </div>
     </div>
@@ -361,6 +431,36 @@
       <div class="picker-foot">
         <label class="cb"><input type="checkbox" id="pickerRecursive"> 包含子文件夹</label>
         <button class="btn primary" id="pickerConfirm">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自定义颜色选择器（RGB 圆形取色） -->
+  <div class="cp-overlay hidden" id="cpOverlay">
+    <div class="cp-popover glass">
+      <div class="cp-head">
+        <span>选择颜色</span>
+        <button class="cp-close" id="cpClose" title="关闭">✕</button>
+      </div>
+      <div class="cp-body">
+        <div class="cp-wheel-wrap" id="cpWheelWrap">
+          <div class="cp-wheel" id="cpWheel"></div>
+          <div class="cp-wheel-dot" id="cpWheelDot"></div>
+        </div>
+        <div class="cp-sv-wrap" id="cpSvWrap">
+          <div class="cp-sv" id="cpSv"></div>
+          <div class="cp-sv-dot" id="cpSvDot"></div>
+        </div>
+      </div>
+      <div class="cp-fields">
+        <label>H <input type="number" id="cpH" min="0" max="360" step="1"></label>
+        <label>S <input type="number" id="cpS" min="0" max="100" step="1"></label>
+        <label>L <input type="number" id="cpL" min="0" max="100" step="1"></label>
+        <label>HEX <input type="text" id="cpHex" spellcheck="false"></label>
+      </div>
+      <div class="cp-foot">
+        <button class="btn btn-ghost" id="cpCancel">取消</button>
+        <button class="btn primary" id="cpOk">确定</button>
       </div>
     </div>
   </div>
