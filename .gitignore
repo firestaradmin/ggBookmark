@@ -3,3 +3,4 @@ node_modules/
 .chrome-profile2/
 .prof
 temp
+/packages

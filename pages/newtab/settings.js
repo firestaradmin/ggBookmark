@@ -1639,10 +1639,18 @@
       latestEl.textContent = latest ? 'v' + latestVer : '—';
       const isNewer = latestVer && cur && compareVersions(latestVer, cur) > 0;
       if (hint) {
-        hint.textContent = isNewer
-          ? '发现新版本 v' + latestVer + '，可前往更新页面下载。'
-          : '已是最新版本。';
-        hint.style.color = isNewer ? 'var(--accent)' : 'var(--text-faint)';
+        if (isNewer) {
+          // 有新版：提示文字包含可点击的更新链接（指向 GitHub releases 页面）
+          const url = data.html_url || 'https://github.com/firestaradmin/ggBookmark/releases';
+          hint.style.color = 'var(--text-faint)';
+          hint.innerHTML = '发现新版本 v' + latestVer + '，点击 <a class="update-link" href="' + url + '" target="_blank" rel="noopener">前往更新页面</a> 下载。';
+          hint.querySelectorAll('.update-link').forEach((a) => {
+            a.addEventListener('click', (e) => { e.preventDefault(); GG.api.tabs.create({ url: a.href }); });
+          });
+        } else {
+          hint.style.color = 'var(--text-faint)';
+          hint.textContent = '已是最新版本。';
+        }
       }
       if (releaseBtn) {
         releaseBtn.style.display = isNewer ? '' : 'none';
