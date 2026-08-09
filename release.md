@@ -18,14 +18,15 @@
 
 ## 🗂 版本号存放位置
 
-发布时必须**同步更新**以下两个文件中的版本号，保持一致：
+版本号**统一以 `manifest.json` 的 `version` 字段为唯一权威来源**，只需修改这一处，其余位置均自动读取：
 
-| 文件 | 字段 | 说明 |
+| 文件 | 版本号来源 | 说明 |
 | --- | --- | --- |
-| `manifest.json` | `version` | Chrome 扩展的权威版本号，页脚通过 `chrome.runtime.getManifest().version` 读取 |
-| `lib/store.js` | `GG.VERSION` | 用于配置导出 / WebDAV 同步时写入的版本标识 |
+| `manifest.json` | `version` | 唯一需要手动修改的权威版本号 |
+| `lib/store.js` | `GG.VERSION` | 运行时从 `chrome.runtime.getManifest().version` 自动读取，**无需手动改** |
+| 起始页页脚 | — | 运行时从 manifest 自动读取，**无需手动改** |
 
-> 示例：将两个文件中的版本号统一改为 `1.0.3`。
+> 发布时只需修改 `manifest.json` 的 `version`，其它位置自动同步。
 
 ## 🔄 发布流程步骤
 
@@ -37,10 +38,7 @@
 
 ### 第 2 步：修改程序内显示的版本号
 
-同步更新以下两处版本号为新版本：
-
-1. `manifest.json` 的 `version` 字段
-2. `lib/store.js` 的 `GG.VERSION` 字段
+只需修改 `manifest.json` 的 `version` 字段为新版本；`lib/store.js` 与起始页页脚的版本号均会从 manifest 自动读取，无需手动同步。
 
 ### 第 3 步：将本次更新内容写入 CHANGELOG
 
@@ -99,7 +97,7 @@ git push origin v1.0.3
 
 发布前核对以下内容：
 
-- [ ] 新版本号已同步更新到 `manifest.json` 与 `lib/store.js`
+- [ ] 新版本号已更新到 `manifest.json`（`lib/store.js` 与页脚自动同步读取）
 - [ ] `CHANGELOG.md` 已添加新版本条目及导航链接
 - [ ] Commit 信息已规范化（带 `feat:` / `fix:` 等前缀并简介内容）
 - [ ] 已提交本次改动

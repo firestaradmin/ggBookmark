@@ -161,6 +161,18 @@ html, body {
   user-select: none;
 }
 
+/* 内联快捷键代码样式 */
+.help-body code {
+  font-family: Consolas, Menlo, Monaco, monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border-soft);
+  color: var(--text);
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
   .help-wrap { grid-template-columns: 1fr; }
   .toc { position: static; }

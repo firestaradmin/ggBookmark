@@ -870,7 +870,11 @@ html[data-theme="light"] .view-menu { background: rgba(250, 251, 255, 0.9); }
   padding-left: 10px;
   border-left: 1px solid rgba(255, 255, 255, 0.15);
   color: var(--text-dim);
+  pointer-events: auto;
+  text-decoration: none;
+  transition: color .15s ease;
 }
+.app-footer .footer-version:hover { color: var(--accent); }
 .app-footer .footer-github {
   display: inline-flex;
   align-items: center;

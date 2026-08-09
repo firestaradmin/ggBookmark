@@ -25,13 +25,14 @@
       <h3>目录</h3>
       <a href="#start">一、起始页概览</a>
       <a href="#card">二、卡片操作</a>
-      <a href="#cardmenu">三、卡片菜单</a>
-      <a href="#view">四、紧凑模式与卡片高度</a>
-      <a href="#cat">五、分类</a>
-      <a href="#organizer">六、整理书签</a>
-      <a href="#settings">七、设置</a>
-      <a href="#data">八、数据导入 / 导出 / 同步</a>
-      <a href="#tips">九、常用技巧</a>
+      <a href="#allbm">三、所有书签浮窗</a>
+      <a href="#cardmenu">四、卡片菜单</a>
+      <a href="#view">五、紧凑模式与卡片高度</a>
+      <a href="#cat">六、分类</a>
+      <a href="#organizer">七、整理书签</a>
+      <a href="#settings">八、设置</a>
+      <a href="#data">九、数据导入 / 导出 / 同步</a>
+      <a href="#tips">十、常用技巧</a>
     </nav>
 
     <section class="help-body">
@@ -39,7 +40,7 @@
         <h2>一、起始页概览</h2>
         <p>新标签页被替换为 GG Bookmark 起始页，整体布局：</p>
         <ul>
-          <li><strong>顶部左侧</strong>：分类标签（导航精品 / 投资 / 系统…），可自定义。</li>
+          <li><strong>顶部左侧</strong>：「所有书签」按钮（最左）与分类标签（导航精品 / 投资 / 系统…），可自定义。</li>
           <li><strong>顶部中央</strong>：搜索框，点击左侧图标可切换搜索引擎，回车搜索。</li>
           <li><strong>顶部右侧</strong>：帮助、显示设置、整理书签、设置、卡片添加。</li>
           <li><strong>主体</strong>：按分类以网格卡片展示书签，卡片可多列、可拖动调整。</li>
@@ -54,13 +55,27 @@
           <li><strong>调整卡片高度</strong>：拖动卡片底部横条可上下调整该卡片的高度。</li>
           <li><strong>列宽</strong>：所有卡片列宽在「设置 → 卡片列宽」统一调整。</li>
           <li><strong>点击书签</strong>：在新标签页打开该网站。</li>
+          <li><strong>Ctrl / ⌘ + 点击 或 鼠标中键</strong>：在后台新标签页打开，页面停留在当前起始页。</li>
           <li><strong>拖动书签</strong>：卡片内拖动可排序；拖到另一张卡片可把书签移动到那个文件夹。</li>
           <li><strong>右键书签</strong>：打开 / 复制链接 / 移出卡片 / 删除书签。</li>
         </ul>
       </section>
 
+      <section class="group" id="allbm">
+        <h2>三、所有书签浮窗</h2>
+        <p>点击顶部最左侧的「所有书签」按钮，或在页面任意处按下 <code>~</code> / <code>`</code> 键，即可打开一个居中的书签浏览器浮窗，方便在全部书签中快速找到并打开任意一个。</p>
+        <ul>
+          <li><strong>左侧导航树</strong>：按文件夹层级浏览，点文件夹行选中，点箭头折叠 / 展开。</li>
+          <li><strong>右侧内容区</strong>：显示当前文件夹的书签；勾选「含子文件夹」可连同子文件夹分组展示。</li>
+          <li><strong>即时搜索</strong>：输入即过滤，支持多词空格匹配，匹配标题 / 链接，关键词高亮并显示所在路径。</li>
+          <li><strong>键盘流</strong>：打开后自动聚焦搜索框，↑ / ↓ 选择，Enter 打开，Ctrl + Enter 或鼠标中键后台打开，Esc 先清空搜索词再关闭。</li>
+          <li><strong>后台打开</strong>：Ctrl / ⌘ + 点击或鼠标中键，在后台打开且浮窗不关闭，可连续打开多个书签。</li>
+          <li><strong>关闭</strong>：按 <code>~</code> / <code>`</code>、Esc，点右上角 ✕ 或点击浮窗外部。</li>
+        </ul>
+      </section>
+
       <section class="group" id="cardmenu">
-        <h2>三、卡片菜单</h2>
+        <h2>四、卡片菜单</h2>
         <p>点击每张卡片右上角的设置按钮，可对单张卡片操作：</p>
         <ul>
           <li><strong>重新选择文件夹</strong>：更换卡片绑定的书签文件夹。</li>
@@ -73,7 +88,7 @@
       </section>
 
       <section class="group" id="view">
-        <h2>四、紧凑模式与卡片高度</h2>
+        <h2>五、紧凑模式与卡片高度</h2>
         <ul>
           <li><strong>紧凑模式</strong>：当卡片高度较小时，书签项自动把「标题 + 域名」合并到一行、图标变小，节省空间。</li>
           <li><strong>全局设置</strong>：点击顶部「显示设置」按钮，可一次性对所有卡片设置紧凑模式（自动 / 固定开启 / 固定关闭）和卡片高度（自适应 / 固定）。</li>
@@ -82,7 +97,7 @@
       </section>
 
       <section class="group" id="cat">
-        <h2>五、分类</h2>
+        <h2>六、分类</h2>
         <ul>
           <li><strong>切换分类</strong>：点击顶部标签。</li>
           <li><strong>新建分类</strong>：点击分类栏最右侧的「＋」。</li>
@@ -92,7 +107,7 @@
       </section>
 
       <section class="group" id="organizer">
-        <h2>六、整理书签</h2>
+        <h2>七、整理书签</h2>
         <p>点击顶部「整理书签」按钮进入，是一个分栏式的书签管理器：</p>
         <ul>
           <li><strong>左侧</strong>：文件夹树。</li>
@@ -104,7 +119,7 @@
       </section>
 
       <section class="group" id="settings">
-        <h2>七、设置</h2>
+        <h2>八、设置</h2>
         <p>点击顶部「设置」按钮打开右侧设置面板：</p>
         <ul>
           <li><strong>背景</strong>：渐变 / 深色渐变 / 预设壁纸 / 自定义图片，可调模糊与遮罩透明度。</li>
@@ -115,7 +130,7 @@
       </section>
 
       <section class="group" id="data">
-        <h2>八、数据导入 / 导出 / 同步</h2>
+        <h2>九、数据导入 / 导出 / 同步</h2>
         <ul>
           <li><strong>导出配置</strong>：把设置、卡片布局连同书签导出为 JSON 文件备份。</li>
           <li><strong>导入配置</strong>：从 JSON 恢复（书签会重建，建议先备份）。</li>
@@ -125,8 +140,9 @@
       </section>
 
       <section class="group" id="tips">
-        <h2>九、常用技巧</h2>
+        <h2>十、常用技巧</h2>
         <ul>
+          <li>按 <code>~</code> / <code>`</code> 键可随时唤起「所有书签」浮窗，输入关键词即可快速定位并打开。</li>
           <li>拖动卡片到列的空位再松开，即可快速换列。</li>
           <li>紧凑模式下卡片能装下更多书签，适合窄屏。</li>
           <li>「自动适应」按钮让卡片按子项数量自动展开全部内容。</li>
