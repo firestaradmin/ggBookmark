@@ -228,13 +228,15 @@ html[data-theme="light"] .searchwrap input::placeholder { color: #8a97b3; }
   border-radius: 12px;
   min-width: 180px;
   z-index: 50;
-  /* semi-opaque so the menu stays readable over any background */
-  background: rgba(18, 24, 42, 0.55);
+  /* 与卡片一致：跟随 --panel-bg / --glass-blur（由磨砂设置驱动）；
+     未设置这些变量的页面（如 organizer）回退到足够实的深色，保证可读 */
+  background: var(--panel-bg, rgba(16, 22, 40, 0.88));
   border: 1px solid var(--glass-border-soft);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(140%);
 }
+html[data-theme="light"] .menu { background: var(--panel-bg, rgba(250, 251, 255, 0.9)); }
 .menu .menu-item {
   display: flex;
   align-items: center;

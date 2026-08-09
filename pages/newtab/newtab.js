@@ -268,8 +268,15 @@
       name.dataset.tip = pin.url;
 
       el.append(ico, name);
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (e) => {
+        // Ctrl/Cmd + 左键：后台打开，停留在本页
+        if (e.ctrlKey || e.metaKey) { GG.api.tabs.create({ url: pin.url, active: false }); return; }
         GG.api.tabs.create({ url: pin.url });
+      });
+      el.addEventListener('auxclick', (e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        GG.api.tabs.create({ url: pin.url, active: false });
       });
       el.addEventListener('contextmenu', (e) => { e.preventDefault(); openPinMenu(e, idx, el); });
       el.addEventListener('dragstart', (e) => {
@@ -531,7 +538,15 @@
 
       tile.addEventListener('click', (e) => {
         if (e.target.closest('.tile-more')) return;
+        // Ctrl/Cmd + 左键：后台打开，停留在本页
+        if (e.ctrlKey || e.metaKey) { GG.api.tabs.create({ url: bm.url, active: false }); return; }
         GG.api.tabs.create({ url: bm.url });
+      });
+      // 中键：后台打开
+      tile.addEventListener('auxclick', (e) => {
+        if (e.button !== 1 || e.target.closest('.tile-more')) return;
+        e.preventDefault();
+        GG.api.tabs.create({ url: bm.url, active: false });
       });
 
       tile.addEventListener('contextmenu', (e) => {
@@ -1047,7 +1062,7 @@
     const mode = globalCompact();
     // const ic = mode === 'on' ? 'compactOn' : (mode === 'off' ? 'compactOff' : 'compactAuto');
     // btn.innerHTML = GG.icon(ic);
-    btn.innerHTML = GG.icon('cardMenu');
+    btn.innerHTML = GG.icon('sizeSet');
     btn.dataset.tip = '显示设置：紧凑模式与卡片高度';
   }
   // Derive the current global compact state from existing cards.
@@ -1696,6 +1711,374 @@
     render(state.history.length);
   }
 
+  // ---------- 所有书签 浮窗 ----------
+  // 点击工具栏最左侧按钮弹出居中浮窗：左侧文件夹导航树，右侧内容区。
+  // 支持即时搜索（匹配时右侧平铺全部结果）与纯键盘操作。
+  function wireAllBookmarks() {
+    const btn = $('#btnAllBm');
+    if (!btn) return;
+    btn.innerHTML = GG.icon('allBookmarks');
+
+    const MAX_RESULTS = 300; // 单侧最多渲染条数，保证大书签库不卡
+    let overlay = null;      // 遮罩根元素（open 时存在）
+    let flat = null;         // 扁平书签列表 [{id,title,url,path,folderId}]
+    let folders = null;      // 文件夹树 [{id,title,path,depth,bookmarks,children,total}]
+    let folderById = null;   // id -> folder 节点（含虚拟 'all'）
+    let selectedId = 'all';  // 当前选中文件夹 id
+    let recursive = true;    // 内容区是否包含子文件夹
+    let items = [];          // 当前可键盘导航的 .allbm-item 元素
+    let activeIdx = -1;
+    let searching = false;
+
+    const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
+
+    function open() {
+      if (overlay) { close(); return; }
+      buildPop();
+      overlay.classList.add('open');
+      loadData();
+      const input = overlay.querySelector('.allbm-search input');
+      setTimeout(() => input.focus(), 0);
+    }
+
+    function close() {
+      if (!overlay) return;
+      overlay.remove();
+      overlay = null; items = []; activeIdx = -1; searching = false;
+    }
+
+    function buildPop() {
+      overlay = document.createElement('div');
+      overlay.className = 'allbm-overlay';
+      overlay.innerHTML =
+        '<div class="allbm-pop">' +
+          '<div class="allbm-head">' +
+            '<div class="allbm-search">' +
+              '<span class="allbm-se-icon">' + GG.icon('search') + '</span>' +
+              '<input type="text" placeholder="搜索所有书签…（↑↓ 选择，Enter|左键 打开，Esc 关闭, Ctrl+Enter|Ctrl+左键 后台打开）" autocomplete="off" spellcheck="false">' +
+              '<button class="allbm-clear" tabindex="-1">' + GG.icon('close_x') + '</button>' +
+            '</div>' +
+            '<button class="allbm-close" tabindex="-1">' + GG.icon('close_x') + '</button>' +
+          '</div>' +
+          '<div class="allbm-main">' +
+            '<div class="allbm-nav"></div>' +
+            '<div class="allbm-content">' +
+              '<div class="allbm-content-head">' +
+                '<span class="c-path"></span>' +
+                '<label class="c-recursive"><input type="checkbox" checked> 含子文件夹</label>' +
+                '<span class="c-count"></span>' +
+              '</div>' +
+              '<div class="allbm-body"></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      const input = overlay.querySelector('.allbm-search input');
+      const clearBtn = overlay.querySelector('.allbm-clear');
+      const recChk = overlay.querySelector('.c-recursive input');
+
+      input.addEventListener('input', () => {
+        overlay.querySelector('.allbm-search').classList.toggle('has-q', !!input.value);
+        render(input.value.trim());
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveActive(1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); moveActive(-1); }
+        else if (e.key === 'Enter') {
+          e.preventDefault();
+          const it = items[activeIdx] || items[0];
+          if (it) openItem(it, e.ctrlKey || e.metaKey);
+        }
+        else if (e.key === 'Escape') {
+          if (input.value) { input.value = ''; overlay.querySelector('.allbm-search').classList.remove('has-q'); render(''); }
+          else close();
+        }
+      });
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        overlay.querySelector('.allbm-search').classList.remove('has-q');
+        render('');
+        input.focus();
+      });
+      overlay.querySelector('.allbm-close').addEventListener('click', close);
+      overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
+      overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+      recChk.addEventListener('change', () => {
+        recursive = recChk.checked;
+        renderContent();
+      });
+      document.body.appendChild(overlay);
+    }
+
+    async function loadData() {
+      const body = overlay.querySelector('.allbm-body');
+      body.innerHTML = '<div class="allbm-empty">加载中…</div>';
+      try {
+        const tree = await GG.api.bookmarks.getTree();
+        flat = [];
+        folders = [];
+        folderById = new Map();
+        const roots = (tree[0] && tree[0].children) || tree || [];
+        // 根级散书签（不在任何文件夹内）归入一个虚拟分组
+        const loose = roots.filter((n) => n.type === 'bookmark');
+        roots.filter((n) => n.type === 'folder').forEach((n) => walkNode(n, '', 0, folders));
+        if (loose.length) {
+          const vf = { id: '__loose__', title: '未归档', path: '未归档', depth: 0, bookmarks: [], children: [], total: loose.length };
+          loose.forEach((c) => {
+            const b = { id: c.id, title: c.title || c.url, url: c.url, path: '', folderId: '__loose__' };
+            flat.push(b);
+            vf.bookmarks.push(b);
+          });
+          folders.push(vf);
+          folderById.set(vf.id, vf);
+        }
+        // 虚拟「全部书签」根节点
+        folderById.set('all', { id: 'all', title: '全部书签', path: '全部书签', depth: -1, bookmarks: flat, children: folders, total: flat.length });
+        selectedId = 'all';
+        renderNav();
+        render(overlay.querySelector('.allbm-search input').value.trim());
+      } catch (e) {
+        body.innerHTML = '<div class="allbm-empty">书签加载失败</div>';
+      }
+    }
+
+    // 递归收集：flat 用于搜索；folders 用于左侧导航树
+    function walkNode(node, parentPath, depth, siblings) {
+      if (node.type !== 'folder') return;
+      const path = parentPath ? parentPath + ' / ' + (node.title || '（未命名）') : (node.title || '（未命名）');
+      const f = { id: node.id, title: node.title || '（未命名）', path, depth, bookmarks: [], children: [] };
+      siblings.push(f);
+      folderById.set(f.id, f);
+      (node.children || []).forEach((c) => {
+        if (c.type === 'folder') walkNode(c, path, depth + 1, f.children);
+        else if (c.type === 'bookmark') {
+          const b = { id: c.id, title: c.title || c.url, url: c.url, path: parentPath, folderId: node.id };
+          flat.push(b);
+          f.bookmarks.push(b);
+        }
+      });
+      // total = 直属 + 子孙，便于文件夹计数展示
+      f.total = f.children.reduce((s, c) => s + (c.total || 0), f.bookmarks.length);
+    }
+
+    /* ---- 左侧导航树 ---- */
+    function renderNav() {
+      const nav = overlay.querySelector('.allbm-nav');
+      nav.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      // 固定顶部「全部书签」入口
+      frag.appendChild(buildNavRow(folderById.get('all'), true));
+      folders.forEach((f) => frag.appendChild(buildNavRow(f, false)));
+      nav.appendChild(frag);
+    }
+
+    function buildNavRow(f, isAll) {
+      const wrap = document.createElement('div');
+      const row = document.createElement('div');
+      row.className = 'allbm-nav-row' + (f.id === selectedId ? ' selected' : '');
+      row.dataset.id = f.id;
+      row.style.paddingLeft = (8 + (isAll ? 0 : f.depth) * 14) + 'px';
+      const hasKids = !isAll && f.children.length > 0;
+      row.innerHTML =
+        (hasKids ? '<span class="tw-arrow">' + ARROW + '</span>' : '<span class="tw-arrow" style="visibility:hidden">' + ARROW + '</span>') +
+        '<span class="f-ico">' + GG.icon(isAll ? 'allBookmarks' : 'folder') + '</span>' +
+        '<span class="f-name"></span>' +
+        '<span class="f-count">' + (f.total || 0) + '</span>';
+      row.querySelector('.f-name').textContent = f.title;
+      wrap.appendChild(row);
+
+      let childBox = null;
+      if (hasKids) {
+        childBox = document.createElement('div');
+        childBox.className = 'allbm-nav-children' + (f.depth >= 1 ? ' collapsed' : '');
+        if (f.depth >= 1) row.classList.add('collapsed');
+        f.children.forEach((c) => childBox.appendChild(buildNavRow(c, false)));
+        wrap.appendChild(childBox);
+      }
+
+      row.addEventListener('click', (e) => {
+        // 点箭头只折叠/展开；点其余部分选中
+        if (e.target.closest('.tw-arrow') && hasKids) {
+          row.classList.toggle('collapsed');
+          childBox.classList.toggle('collapsed');
+          return;
+        }
+        selectFolder(f.id);
+      });
+      return wrap;
+    }
+
+    function selectFolder(id) {
+      selectedId = id;
+      overlay.querySelectorAll('.allbm-nav-row').forEach((r) => r.classList.toggle('selected', r.dataset.id === id));
+      renderContent();
+    }
+
+    /* ---- 右侧内容区 ---- */
+    function render(query) {
+      if (!overlay || !flat) return;
+      searching = !!query;
+      const recLabel = overlay.querySelector('.c-recursive');
+      recLabel.style.display = searching ? 'none' : '';
+      if (searching) renderSearch(query.toLowerCase());
+      else renderContent();
+    }
+
+    function renderContent() {
+      const f = folderById.get(selectedId);
+      if (!f) return;
+      const pathEl = overlay.querySelector('.c-path');
+      const countEl = overlay.querySelector('.c-count');
+      const body = overlay.querySelector('.allbm-body');
+      pathEl.textContent = f.path;
+      body.innerHTML = '';
+      items = []; activeIdx = -1;
+
+      // 收集要显示的书签；recursive 时按文件夹分组
+      const frag = document.createDocumentFragment();
+      let total = 0;
+      const addGroup = (title, list) => {
+        if (!list.length) return;
+        total += list.length;
+        if (title) {
+          const g = document.createElement('div');
+          g.className = 'allbm-group';
+          g.innerHTML = '<span class="f-ico">' + GG.icon('folder') + '</span><span></span>';
+          g.querySelector('span:last-child').textContent = title;
+          frag.appendChild(g);
+        }
+        list.slice(0, MAX_RESULTS).forEach((b) => frag.appendChild(buildItemEl(b, false)));
+      };
+
+      if (selectedId === 'all' || !recursive) {
+        // 「全部书签」或不含子文件夹：平铺展示
+        addGroup('', selectedId === 'all' ? flat : f.bookmarks);
+      } else {
+        // 本文件夹直属 + 每个子文件夹一组（组内含其全部子孙书签）
+        addGroup('', f.bookmarks);
+        f.children.forEach((c) => addGroup(c.title, allBookmarksOf(c)));
+      }
+
+      countEl.textContent = total + ' 个书签' + (total > MAX_RESULTS ? '（仅显示前 ' + MAX_RESULTS + '）' : '');
+      if (!total) body.innerHTML = '<div class="allbm-empty">这个文件夹是空的</div>';
+      else body.appendChild(frag);
+      afterRenderItems();
+    }
+
+    // 收集某文件夹下（含所有子孙）的书签
+    function allBookmarksOf(node) {
+      let out = node.bookmarks.slice();
+      node.children.forEach((c) => { out = out.concat(allBookmarksOf(c)); });
+      return out;
+    }
+
+    function renderSearch(q) {
+      const pathEl = overlay.querySelector('.c-path');
+      const countEl = overlay.querySelector('.c-count');
+      const body = overlay.querySelector('.allbm-body');
+      pathEl.textContent = '搜索：“' + q + '”';
+      body.innerHTML = '';
+      items = []; activeIdx = -1;
+
+      const words = q.split(/\s+/).filter(Boolean);
+      const matched = [];
+      for (const b of flat) {
+        const hay = (b.title + ' ' + b.url).toLowerCase();
+        if (words.every((w) => hay.includes(w))) matched.push(b);
+        if (matched.length >= MAX_RESULTS) break;
+      }
+      countEl.textContent = '匹配 ' + matched.length + (matched.length >= MAX_RESULTS ? '+' : '') + ' / 共 ' + flat.length + ' 个';
+      if (!matched.length) { body.innerHTML = '<div class="allbm-empty">没有匹配的书签</div>'; return; }
+      const frag = document.createDocumentFragment();
+      matched.forEach((b) => frag.appendChild(buildItemEl(b, true, words[0])));
+      body.appendChild(frag);
+      afterRenderItems();
+    }
+
+    function afterRenderItems() {
+      items = Array.from(overlay.querySelectorAll('.allbm-item'));
+      if (items.length) setActive(0);
+      overlay.querySelector('.allbm-body').scrollTop = 0;
+    }
+
+    function buildItemEl(b, showPath, query) {
+      const el = document.createElement('div');
+      el.className = 'allbm-item';
+      el.dataset.url = b.url;
+      const ico = document.createElement('span');
+      ico.className = 'b-ico';
+      GG.renderFavicon(ico, b.url, b.title, (state.settings && state.settings.faviconSource) || GG.DEFAULTS.faviconSource);
+      const main = document.createElement('div');
+      main.className = 'b-main';
+      const title = document.createElement('div');
+      title.className = 'b-title';
+      if (query) title.innerHTML = highlight(b.title, query);
+      else title.textContent = b.title;
+      main.appendChild(title);
+      if (showPath && b.path) {
+        const p = document.createElement('div');
+        p.className = 'b-path';
+        p.textContent = b.path;
+        main.appendChild(p);
+      }
+      el.append(ico, main);
+      el.addEventListener('click', (e) => openItem(el, e.ctrlKey || e.metaKey));
+      el.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openItem(el, true); } });
+      el.addEventListener('mousemove', () => { const i = items.indexOf(el); if (i >= 0 && i !== activeIdx) setActive(i); });
+      return el;
+    }
+
+    function highlight(text, word) {
+      if (!word) return escapeHtml(text);
+      const w = word.toLowerCase();
+      const i = text.toLowerCase().indexOf(w);
+      if (i < 0) return escapeHtml(text);
+      return escapeHtml(text.slice(0, i)) + '<mark>' + escapeHtml(text.slice(i, i + w.length)) + '</mark>' + escapeHtml(text.slice(i + w.length));
+    }
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function setActive(i) {
+      if (!items.length) return;
+      activeIdx = Math.max(0, Math.min(i, items.length - 1));
+      items.forEach((el, idx) => el.classList.toggle('active', idx === activeIdx));
+    }
+    function moveActive(delta) {
+      if (!items.length) return;
+      setActive((activeIdx + delta + items.length) % items.length);
+      items[activeIdx].scrollIntoView({ block: 'nearest' });
+    }
+
+    function openItem(el, background) {
+      const url = el.dataset.url;
+      if (!url) return;
+      if (background) GG.api.tabs.create({ url, active: false });
+      else { GG.api.tabs.create({ url }); close(); }
+    }
+
+    btn.addEventListener('click', (e) => { e.stopPropagation(); open(); });
+
+    // 全局快捷键：` 或 ~ 切换浮窗。
+    // - 浮窗未开：任何输入框外按 ` 直接打开。
+    // - 浮窗已开：焦点在搜索框时 ` 视为正常输入；焦点不在输入框（如点了条目后）按 ` 关闭。
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== '`' && e.key !== '~') return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const inField = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
+      if (overlay) {
+        if (inField) return; // 搜索框内可正常输入 ` 字符
+        e.preventDefault();
+        close();
+        return;
+      }
+      // 输入框已有关键词时不劫持（正常输入 ` 字符）；空输入框按 ` 则打开浮窗
+      if (inField && e.target.value) return;
+      e.preventDefault();
+      open();
+    });
+  }
+
   // ---------- Buttons ----------
   function wireButtons() {
     // 主题模式切换
@@ -1710,6 +2093,7 @@
     });
     wireViewMenu();
     syncViewBtn();
+    wireAllBookmarks();
     $('#btnSettings').innerHTML = GG.icon('settings');
     $('#btnSettings').addEventListener('click', () => {
       const panel = document.getElementById('ntSettings');
