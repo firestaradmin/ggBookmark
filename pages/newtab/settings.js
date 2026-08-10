@@ -820,6 +820,7 @@
     if ($('#syncTrigInterval')) $('#syncTrigInterval').checked = triggers.includes('interval');
     if ($('#syncTrigSettings')) $('#syncTrigSettings').checked = triggers.includes('settingsChange');
     if ($('#syncTrigBookmark')) $('#syncTrigBookmark').checked = triggers.includes('bookmarkChange');
+    if ($('#syncTrigCard')) $('#syncTrigCard').checked = triggers.includes('cardChange');
     if ($('#syncTrigStartup')) $('#syncTrigStartup').checked = triggers.includes('startup');
     const ivEl = $('#syncInterval');
     if (ivEl) {
@@ -911,6 +912,7 @@
     if ($('#syncTrigInterval') && $('#syncTrigInterval').checked) triggers.push('interval');
     if ($('#syncTrigSettings') && $('#syncTrigSettings').checked) triggers.push('settingsChange');
     if ($('#syncTrigBookmark') && $('#syncTrigBookmark').checked) triggers.push('bookmarkChange');
+    if ($('#syncTrigCard') && $('#syncTrigCard').checked) triggers.push('cardChange');
     if ($('#syncTrigStartup') && $('#syncTrigStartup').checked) triggers.push('startup');
     return {
       enabled: $('#syncEnabled') ? $('#syncEnabled').checked : false,

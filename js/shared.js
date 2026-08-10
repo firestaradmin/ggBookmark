@@ -223,6 +223,8 @@ GG.renderFavicon = function (container, url, title, source) {
   container.innerHTML = '';
   const letter = (title || '?').charAt(0);
   const showLetter = () => {
+    // 清空后再追加，保证幂等：网络图加载失败/1x1 占位回退字母时不会叠加重复字符
+    container.innerHTML = '';
     const s = document.createElement('span');
     s.className = 'letter';
     s.textContent = letter;
