@@ -554,6 +554,18 @@
   }
   // 重建导出的书签子树：将其内部内容（文件夹 + 书签）直接导入到用户选定的目标文件夹下，
   // 不再额外包裹一层顶层文件夹，保留原有的内部子文件夹结构。返回 { newPathToId, idToPath }
+  // 解析真实的“书签栏”根文件夹 id（Chrome 根容器 id 是数字，不能硬编码 Firefox 的 'toolbar_____'）
+  async function resolveToolbarId() {
+    try {
+      const tree = await GG.api.bookmarks.getTree();
+      const containers = (tree[0] && tree[0].children) || [];
+      const byTitle = containers.find((c) => c.type === 'folder' && /书签栏|Bookmarks bar|Bookmarks Toolbar/i.test(c.title || ''));
+      if (byTitle) return byTitle.id;
+      const first = containers.find((c) => c.type === 'folder');
+      if (first) return first.id;
+    } catch (e) { /* ignore */ }
+    return '1';
+  }
   async function recreateBookmarks(trees, targetParentId) {
     const idToPath = new Map();
     const oldPathToId = new Map();
@@ -561,7 +573,7 @@
       indexBookmarkPaths(sub.node, [], oldPathToId, idToPath);
     });
 
-    const root = targetParentId || 'toolbar_____';
+    const root = targetParentId || await resolveToolbarId();
     const newPathToId = new Map();
 
     // 缓存父子关系，避免重复查询
@@ -1217,9 +1229,17 @@
           if (!skipBookmarks) {
             try {
               // 优先使用配置文件里记录的导入文件夹；其次用本地保存的设置；都没有才询问用户
-              const importFolder = importedSettings.bookmarkImportFolder
+              let importFolder = importedSettings.bookmarkImportFolder
                 || (await GG.api.storage.get('settings')).settings?.bookmarkImportFolder
                 || '';
+              // 配置文件里的文件夹 id 可能来自其他设备，在本机未必存在，需校验
+              if (importFolder) {
+                try {
+                  await GG.api.bookmarks.getChildren(importFolder);
+                } catch (e) {
+                  importFolder = '';
+                }
+              }
               const target = importFolder
                 ? importFolder
                 : await pickBookmarkFolder();
