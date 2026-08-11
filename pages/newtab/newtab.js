@@ -62,10 +62,25 @@
 
   // 保存设置：以 state.settings 为准，但同步元数据字段强制取 storage 最新值。
   // 避免用页面内存中可能过期的 state.settings 整体覆盖 storage，导致同步误判远端变更。
+  // 另外：页面只把「本页实际编辑过的字段」合并到最新 storage 上，绝不整体覆盖。
+  // 否则一个长时间打开的旧起始页（内存里的 state.settings 已过期），若在其它页面/设置页
+  // 改过外观后又被触发保存，会把别人的新设置覆盖回旧值（两套设置竞态）。
+  const editedSettingsKeys = new Set();
+  // 记录本页编辑了某个设置字段（编辑后需保存该字段）
+  function editSetting(key, value) {
+    state.settings[key] = value;
+    editedSettingsKeys.add(key);
+  }
   async function saveSettingsPreservingSyncMeta() {
     const latest = await GG.api.storage.get('settings');
     const ls = (latest && latest.settings) || {};
-    const merged = Object.assign({}, ls, state.settings);
+    // 以最新 storage 为基准，仅覆盖本页本次实际编辑过的字段
+    const merged = Object.assign({}, ls);
+    for (const k of editedSettingsKeys) {
+      merged[k] = state.settings[k];
+    }
+    editedSettingsKeys.clear();
+    // 同步元数据字段永远以最新 storage 为准，不被页面内存/本次编辑覆盖
     for (const k of ['lastSyncAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion']) {
       merged[k] = ls[k] || (k === 'lastSyncedFingerprint' ? '' : 0);
     }
@@ -1222,14 +1237,14 @@
 
     sel.addEventListener('change', () => {
       const folder = sel.value || '';
-      state.settings.bookmarkImportFolder = folder;
+      editSetting('bookmarkImportFolder', folder);
       saveSettingsPreservingSyncMeta();
       GG.toast.show(folder ? '已记住书签导入文件夹' : '已清除默认导入文件夹', folder ? 'success' : 'info');
     });
     const clearBtn = document.getElementById('btnClearImportFolder');
     if (clearBtn) clearBtn.addEventListener('click', () => {
       sel.value = '';
-      state.settings.bookmarkImportFolder = '';
+      editSetting('bookmarkImportFolder', '');
       saveSettingsPreservingSyncMeta();
       GG.toast.show('已清除默认导入文件夹', 'info');
     });
@@ -2173,7 +2188,7 @@
       b.addEventListener('click', () => {
         document.querySelectorAll('.theme-btn').forEach((x) => x.classList.remove('active'));
         b.classList.add('active');
-        state.settings.theme = b.dataset.theme;
+        editSetting('theme', b.dataset.theme);
         saveSettingsPreservingSyncMeta();
         document.documentElement.dataset.theme = state.settings.theme;
       });
@@ -2225,7 +2240,7 @@
       b.innerHTML = `<span class="se-mini" style="background-image:url('../../icons/se/${key}.svg')"></span><span></span>`;
       b.querySelector('span:last-child').textContent = se.name;
       b.addEventListener('click', () => {
-        state.settings.searchEngine = key;
+        editSetting('searchEngine', key);
         saveSettingsPreservingSyncMeta();
         renderSearchEngine();
         menu.classList.remove('open');

@@ -599,12 +599,16 @@
         if (n.type === 'folder') {
           let f = await findExisting(parentId, n);
           if (!f) f = await GG.api.bookmarks.create({ title: n.title, parentId, type: 'folder' });
+          // 创建后失效父级缓存，确保后续 findExisting 能看到最新子节点（避免重复创建）
+          childrenCache.delete(parentId);
           const p = parentPath.concat(n.title);
           newPathToId.set(p.join(PATH_SEP), f.id);
           if (n.children) await recreate(n.children, f.id, p);
         } else if (n.type === 'bookmark' && n.url) {
           if (!(await findExisting(parentId, n))) {
             await GG.api.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
+            // 创建后失效父级缓存，避免同文件夹内重复创建
+            childrenCache.delete(parentId);
           }
         }
       }
@@ -1357,7 +1361,7 @@
         const filename = syncFilename();
         try {
           GG.toast.show('正在检查同步状态…', 'info');
-          const r = await GG.Sync.smartSync({ source: '手动' });
+          const r = await GG.Sync.smartSync({ source: '手动', force: true });
           if (r.action === 'uploaded') {
             if (GG.Sync.log) GG.Sync.log({ type: 'upload', source: '手动', target: 'webdav', filename, ok: true, msg: '上传成功（' + r.bookmarkCount + ' 个书签）' }).catch(() => {});
             GG.toast.show('已上传到服务器（' + r.bookmarkCount + ' 个书签）', 'success');
