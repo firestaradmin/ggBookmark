@@ -819,7 +819,6 @@
     if ($('#syncFile')) $('#syncFile').value = sync.filename || 'ggbookmark-config.json';
     if ($('#syncDirection')) $('#syncDirection').value = ['both', 'up', 'down'].includes(sync.direction) ? sync.direction : 'both';
     if ($('#syncBookmarks')) $('#syncBookmarks').checked = sync.syncBookmarks !== false;
-    if ($('#syncVersioned')) $('#syncVersioned').checked = !!sync.versionedBackup;
     const triggers = Array.isArray(sync.triggers) ? sync.triggers : [];
     if ($('#syncTrigInterval')) $('#syncTrigInterval').checked = triggers.includes('interval');
     if ($('#syncTrigSettings')) $('#syncTrigSettings').checked = triggers.includes('settingsChange');
@@ -926,7 +925,7 @@
       filename: ($('#syncFile') ? $('#syncFile').value.trim() : '') || 'ggbookmark-config.json',
       direction: $('#syncDirection') ? $('#syncDirection').value : 'both',
       syncBookmarks: $('#syncBookmarks') ? $('#syncBookmarks').checked : true,
-      versionedBackup: $('#syncVersioned') ? $('#syncVersioned').checked : false,
+      versionedBackup: true, // 版本化备份默认开启，不再提供开关
       triggers: triggers,
       intervalMinutes: $('#syncInterval') ? (Number($('#syncInterval').value) || 30) : 30
     };
