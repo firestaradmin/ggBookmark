@@ -25,6 +25,11 @@
 
   const sel = { dragIds: [], dragFromFolder: null };
 
+  // 视图切换：false = 整理视图，true = 书签查重视图
+  let dupViewOn = false;
+  let dupGroups = [];       // [{ url, items: [{id,title,url,path,keep}] }]
+  let activeDupGroup = null;
+
   function activePanel() {
     return panels.find((p) => p.id === activePanelId) || panels[0];
   }
@@ -807,6 +812,167 @@
     await Promise.all(order.map((id, i) => GG.api.bookmarks.move(id, { parentId: folderId, index: i })));
   }
 
+  // === 书签查重视图 ===
+  // 递归收集全部书签节点并记录其所在路径（用于显示位置）
+  function collectBookmarks(nodes, path, out) {
+    (nodes || []).forEach((n) => {
+      if (n.type === 'bookmark' && n.url) {
+        out.push({ id: n.id, title: n.title || hostOf(n.url), url: n.url, path: path.concat(n.title || '（未命名）') });
+      } else if (n.type === 'folder') {
+        collectBookmarks(n.children, path.concat(n.title || '（未命名）'), out);
+      }
+    });
+  }
+  // 扫描全部书签并按 url 分组，只保留出现次数 > 1 的分组。
+  // 每组默认标记第一项为保留（keep=true），其余为待删除。
+  function buildDupData() {
+    const prevActiveUrl = activeDupGroup ? activeDupGroup.url : null;
+    const all = [];
+    collectBookmarks(tree, [], all);
+    const byUrl = new Map();
+    for (const b of all) {
+      if (!byUrl.has(b.url)) byUrl.set(b.url, []);
+      byUrl.get(b.url).push(b);
+    }
+    dupGroups = [];
+    for (const [url, items] of byUrl) {
+      if (items.length > 1) {
+        dupGroups.push({ url, items: items.map((b, i) => Object.assign({}, b, { keep: i === 0 })) });
+      }
+    }
+    dupGroups.sort((a, b) => b.items.length - a.items.length);
+    // 尽量保持之前选中的分组（按 url 匹配），否则回退到第一个分组
+    activeDupGroup = (prevActiveUrl && dupGroups.find((g) => g.url === prevActiveUrl)) || dupGroups[0] || null;
+  }
+  // 渲染查重结果侧栏（分组列表 + 统计）
+  function renderDupGroups() {
+    const groups = $('#dupGroups');
+    groups.innerHTML = '';
+    buildDupData();
+    const totalDup = dupGroups.reduce((s, g) => s + (g.items.length - 1), 0);
+    const totalBookmarks = (function count(nodes){ let c=0; (nodes||[]).forEach(n=>{ if(n.type==='bookmark')c++; else if(n.type==='folder') c+=count(n.children); }); return c; })(tree);
+    $('#dupSummary').innerHTML =
+      `<div class="stat"><b>${dupGroups.length}</b><span>组重复</span></div>` +
+      `<div class="stat"><b>${totalDup}</b><span>多余项</span></div>` +
+      `<div class="stat"><b>${totalBookmarks}</b><span>总书签</span></div>`;
+    if (!dupGroups.length) return;
+    dupGroups.forEach((g) => {
+      const item = document.createElement('div');
+      item.className = 'group-item' + (g === activeDupGroup ? ' active' : '');
+      const host = hostOf(g.url);
+      item.innerHTML = `<span class="gi-title">${host}</span><span class="gi-count">${g.items.length}</span>`;
+      item.title = g.url;
+      item.addEventListener('click', () => { activeDupGroup = g; renderDupGroups(); renderDupList(); });
+      groups.appendChild(item);
+    });
+  }
+  // 渲染当前分组内书签，供用户选择保留/删除
+  function renderDupList() {
+    const list = $('#dupList');
+    list.innerHTML = '';
+    if (!dupGroups.length) {
+      list.innerHTML = `<div class="dup-empty"><div class="dup-empty-icon">${GG.icon('target')}</div>未发现重复书签</div>`;
+      const bar = document.getElementById('dupActions');
+      if (bar) bar.remove();
+      return;
+    }
+    const g = activeDupGroup;
+    if (!g) return;
+    const block = document.createElement('div');
+    block.className = 'dup-group-block';
+    const title = document.createElement('div');
+    title.className = 'dup-group-title';
+    title.innerHTML = `<span class="dgt-url">${g.url}</span><span class="dgt-count">${g.items.length} 个</span>`;
+    block.appendChild(title);
+    g.items.forEach((b) => {
+      const row = document.createElement('div');
+      row.className = 'dup-item' + (b.keep ? ' dup-keep' : '');
+      row.dataset.keep = b.keep ? '1' : '0';
+      const icon = document.createElement('span');
+      icon.className = 'item-icon';
+      GG.renderFavicon(icon, b.url, b.title, (orgSettings && orgSettings.faviconSource) || GG.DEFAULTS.faviconSource);
+      const info = document.createElement('div');
+      info.className = 'di-info';
+      const t = document.createElement('div');
+      t.className = 'di-title'; t.textContent = b.title;
+      const loc = document.createElement('div');
+      loc.className = 'di-loc'; loc.textContent = b.path.join(' / ') || '（无路径）';
+      info.append(t, loc);
+      const actions = document.createElement('div');
+      actions.className = 'di-actions';
+      const btnKeep = document.createElement('button');
+      btnKeep.className = 'di-btn' + (b.keep ? ' primary' : '');
+      btnKeep.textContent = b.keep ? '保留' : '删除';
+      btnKeep.addEventListener('click', (e) => { e.stopPropagation(); toggleDupKeep(g, b); });
+      actions.appendChild(btnKeep);
+      row.append(icon, info, actions);
+      row.addEventListener('click', () => toggleDupKeep(g, b));
+      block.appendChild(row);
+    });
+    list.appendChild(block);
+    renderDupActions(g);
+  }
+  // 渲染右侧底部执行按钮区
+  function renderDupActions(g) {
+    let bar = document.getElementById('dupActions');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'dupActions';
+      bar.className = 'dup-actions';
+      $('#dupView .dup-main').appendChild(bar);
+    }
+    const toDel = g.items.filter((x) => !x.keep).length;
+    bar.innerHTML = `<span class="da-hint">本组将删除 ${toDel} 个重复书签</span>` +
+      `<button class="btn danger da-exec" ${toDel ? '' : 'disabled'}>执行删除</button>`;
+    const btn = bar.querySelector('.da-exec');
+    btn.addEventListener('click', () => executeDupDelete(g));
+  }
+  // 切换某个书签的保留状态（保证至少保留一份）
+  function toggleDupKeep(group, b) {
+    const keptCount = group.items.filter((x) => x.keep).length;
+    if (b.keep && keptCount <= 1) { GG.toast.show('至少保留一份书签', 'info'); return; }
+    b.keep = !b.keep;
+    renderDupList();
+  }
+  // 执行删除：删除当前组所有未保留的书签，仅本地更新（不重新读取书签树）
+  async function executeDupDelete(group) {
+    const toDel = group.items.filter((x) => !x.keep);
+    if (!toDel.length) return;
+    if (!confirm(`确定删除本组 ${toDel.length} 个重复书签？`)) return;
+    let del = 0;
+    await Promise.all(toDel.map((b) => GG.api.bookmarks.remove(b.id).then(() => { del++; }, () => {})));
+    // 本地更新：从 tree 缓存移除已删除节点，保证 buildDupData 不再扫描到它们
+    removeNodesFromTree(new Set(toDel.map((b) => b.id)));
+    GG.toast.show(`已删除 ${del} 个重复书签`, 'success');
+    // 仅本地刷新
+    rebuildFolderCount();
+    if (dupViewOn) { renderDupGroups(); renderDupList(); }
+    renderFolderTree();
+    await Promise.all(panels.map((p) => renderPanel(p)));
+  }
+  // 从本地 tree 缓存中移除指定 id 的节点（递归遍历）
+  function removeNodesFromTree(ids) {
+    const prune = (nodes) => {
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        if (ids.has(n.id)) { nodes.splice(i, 1); continue; }
+        if (n.children) prune(n.children);
+      }
+    };
+    prune(tree);
+  }
+  function switchView() {
+    dupViewOn = !dupViewOn;
+    const layout = document.querySelector('.layout');
+    const dupView = $('#dupView');
+    if (!layout || !dupView) return;
+    layout.hidden = dupViewOn;
+    dupView.hidden = !dupViewOn;
+    $('#btnDupCheck').classList.toggle('active', dupViewOn);
+    if (dupViewOn) { renderDupGroups(); renderDupList(); }
+    else { renderFolderTree(); renderPanels(); }
+  }
+
   function updateToolbar() {
     const p = activePanel();
     const n = p ? p.selection.size : 0;
@@ -819,6 +985,10 @@
     $('#btnDelete').innerHTML = GG.icon('trash');
     $('#btnUndo').innerHTML = GG.icon('undo');
     $('#btnHome').innerHTML = GG.icon('return');
+    $('#btnDupCheck').innerHTML = GG.icon('copy');
+    $('#btnDupCheck').addEventListener('click', switchView);
+    $('#btnDupRefresh').innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z"></path></svg>';
+    $('#btnDupRefresh').addEventListener('click', () => { renderDupGroups(); renderDupList(); GG.toast.show('已重新扫描', 'success'); });
     $('#btnUndo').addEventListener('click', undo);
     $('#btnDelete').addEventListener('click', deleteSelected);
     $('#btnHome').addEventListener('click', () => GG.api.tabs.update({ url: GG.api.runtime.getURL('pages/newtab/newtab.html') }));

@@ -13,6 +13,7 @@
   <header class="topbar">
     <div class="brand">
       <h1>整理书签</h1>
+      <button class="btn icon-btn" id="btnDupCheck" data-tip="书签查重"></button>
       <button class="btn icon-btn" id="btnHome" data-tip="返回起始页"></button>
     </div>
     <div class="toolbar">
@@ -47,6 +48,24 @@
       <div class="panels" id="panels"></div>
     </section>
   </main>
+
+  <!-- 书签查重视图 -->
+  <div class="layout dup-layout" id="dupView" hidden>
+    <aside class="pane dup-side glass">
+      <div class="pane-title"><span>查重结果</span></div>
+      <div class="dup-summary" id="dupSummary"></div>
+      <div class="folder-tree dup-groups" id="dupGroups"></div>
+    </aside>
+    <section class="pane dup-main glass">
+      <div class="dup-head">
+        <span id="dupHeadTitle">书签查重</span>
+        <div class="btn-group">
+          <button class="btn icon-btn" id="btnDupRefresh" data-tip="重新扫描"></button>
+        </div>
+      </div>
+      <div class="dup-list" id="dupList"></div>
+    </section>
+  </div>
 
   <template id="bookmarkItemTpl">
     <div class="item" draggable="true">
