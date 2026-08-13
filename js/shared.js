@@ -385,7 +385,7 @@ GG.bookmarkEditor = (function () {
       else if (e.key === 'Escape') destroy();
     };
     nameField.input.addEventListener('keydown', onKey);
-    urlField.input.addEventListener('keydown', onKey);
+    if (urlField) urlField.input.addEventListener('keydown', onKey);
   }
 
   function close() {
@@ -552,5 +552,4 @@ GG.folderCreator = (function () {
 
   return { open, close };
 })();
-
 
