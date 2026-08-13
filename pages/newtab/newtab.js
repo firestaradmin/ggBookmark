@@ -81,8 +81,11 @@
     }
     editedSettingsKeys.clear();
     // 同步元数据字段永远以最新 storage 为准，不被页面内存/本次编辑覆盖
-    for (const k of ['lastSyncAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion']) {
-      merged[k] = ls[k] || (k === 'lastSyncedFingerprint' ? '' : 0);
+    // 注意：lastLocalChangeAt 由保存动作本身标记（表示“本地改了，需要上传”），
+    // 不应在此被强制保留回 storage 旧值，否则设置更改后无法触发上传。
+    for (const k of ['lastSyncAt', 'lastRemoteModified', 'lastRemoteETag', 'lastSyncedFingerprint', 'configVersion']) {
+      const strDefault = (k === 'lastSyncedFingerprint' || k === 'lastRemoteETag');
+      merged[k] = ls[k] || (strDefault ? '' : 0);
     }
     state.settings = merged;
     await GG.saveSettings(merged);
@@ -223,7 +226,7 @@
   }
 
   // 同步引擎自动维护的元数据字段——它们的变化不代表用户真正修改了设置，不应触发「设置更改时」同步。
-  const SYNC_META_KEYS = ['lastSyncAt', 'lastLocalChangeAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion'];
+  const SYNC_META_KEYS = ['lastSyncAt', 'lastLocalChangeAt', 'lastRemoteModified', 'lastRemoteETag', 'lastSyncedFingerprint', 'configVersion'];
   // 比较两份设置，忽略同步元数据字段，判断实质内容是否变化。
   function settingsSubstantiallyChanged(prev, next) {
     // 两边都用默认值补齐，避免因默认值字段差异导致误判
@@ -2207,6 +2210,53 @@
     if (cat) cat.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
+  // ---------- 页脚同步警告 ----------
+  // 当同步状态存在冲突 / 大变更或错误时，在页脚版本号右侧显示警告；用户可点击清除。
+  // 清除状态持久化（按警告签名），新警告出现时重新显示。
+  const WARN_DISMISS_KEY = 'syncWarningDismissed';
+  let currentWarnSig = '';
+  async function currentWarning() {
+    try {
+      if (!GG.Sync || !GG.Sync.getSyncState) return null;
+      const st = await GG.Sync.getSyncState();
+      if (st && st.conflict && st.conflict.type) {
+        return { sig: 'conflict:' + (st.conflict.time || ''), msg: st.conflict.type === 'big-change' ? '远端变更较大，需确认' : '本地与远端存在冲突，待处理' };
+      }
+      if (st && st.lastError) {
+        return { sig: 'error:' + (st.lastCheckAt || ''), msg: st.lastError };
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+  async function renderFooterWarning() {
+    const box = $('#footerWarning');
+    if (!box) return;
+    const warn = await currentWarning();
+    let dismissed = '';
+    try { const d = await GG.api.storage.get(WARN_DISMISS_KEY); dismissed = (d && d[WARN_DISMISS_KEY]) || ''; } catch (e) {}
+    if (!warn || warn.sig === dismissed) {
+      box.hidden = true;
+      return;
+    }
+    currentWarnSig = warn.sig;
+    const msgEl = $('#footerWarningMsg');
+    if (msgEl) msgEl.textContent = warn.msg;
+    if (!box.dataset.wired) {
+      box.dataset.wired = '1';
+      const clearBtn = $('#footerWarningClear');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try { await GG.api.storage.set({ [WARN_DISMISS_KEY]: currentWarnSig }); } catch (err) {}
+          box.hidden = true;
+        });
+      }
+    }
+    box.hidden = false;
+  }
+
   // ---------- Init ----------
   async function init() {
     await loadPersistent();
@@ -2216,6 +2266,7 @@
       const el = document.getElementById('footerVersion');
       if (el) el.textContent = 'v' + v;
     } catch (e) { /* 忽略 */ }
+    renderFooterWarning();
     // recompute order for robustness
     applyBg();
     renderSearchEngine();
@@ -2255,6 +2306,7 @@
     // listen for settings / data changes from settings page (import / clear)
     GG.api.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
+      if (changes && 'syncState' in changes) renderFooterWarning();
       const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat', 'pinned'].some((k) => k in changes);
       if (changes.settings) {
         const prevSettings = state.settings;

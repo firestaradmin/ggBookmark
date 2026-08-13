@@ -8,7 +8,7 @@
   const $ = (s) => document.querySelector(s);
   let settings = {};
   // 同步引擎自动维护的元数据字段：保存设置时不得被页面内存旧值覆盖，否则下次同步会误判远端变更。
-  const SYNC_META_KEYS = ['lastSyncAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion'];
+  const SYNC_META_KEYS = ['lastSyncAt', 'lastRemoteModified', 'lastRemoteETag', 'lastSyncedFingerprint', 'configVersion'];
   // 保存设置：以页面内存 settings 为准，但同步元数据字段强制取 storage 最新值。
   // 这样避免用陈旧的页面内存 settings 整体覆盖 storage 而把它们回退成旧值/undefined，
   // 导致下次同步 remoteChanged 误判为 true → 假冲突。
@@ -17,7 +17,8 @@
     const ls = (latest && latest.settings) || {};
     const merged = Object.assign({}, ls, settingsObj);
     for (const k of SYNC_META_KEYS) {
-      merged[k] = ls[k] || (k === 'lastSyncedFingerprint' ? '' : 0);
+      const strDefault = (k === 'lastSyncedFingerprint' || k === 'lastRemoteETag');
+      merged[k] = ls[k] || (strDefault ? '' : 0);
     }
     await GG.saveSettings(merged);
     return merged;
