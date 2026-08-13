@@ -222,10 +222,6 @@
     setTimeout(updateHScroll, 300); // 布局稳定后再检查一次
   }
 
-  // 根据同步模式触发上传（由设置/书签变更事件调用）
-  let syncTimer = null;
-  const SYNC_SOURCE = { settingsChange: '设置更改', bookmarkChange: '书签变更', cardChange: '卡片更改', interval: '定时同步' };
-
   // 同步引擎自动维护的元数据字段——它们的变化不代表用户真正修改了设置，不应触发「设置更改时」同步。
   const SYNC_META_KEYS = ['lastSyncAt', 'lastLocalChangeAt', 'lastRemoteModified', 'lastSyncedFingerprint', 'configVersion'];
   // 比较两份设置，忽略同步元数据字段，判断实质内容是否变化。
@@ -251,67 +247,6 @@
     return false;
   }
 
-  // 标记本地卡片/内容发生过变化：更新 settings.lastLocalChangeAt，
-  // 使同步引擎的 localHasChanged 能识别出「本地较新」从而上传。
-  // 卡片拖动/增删等只改 apps/orderByCat/categories/pinned，不改书签指纹，
-  // 若不更新该时间戳，smartSync 会误判为 in-sync 而不上传。
-  async function markLocalCardChanged() {
-    try {
-      const d = await GG.api.storage.get('settings');
-      const s = Object.assign({}, (d && d.settings) || {});
-      s.lastLocalChangeAt = Math.max(Date.now(), (s.lastSyncAt || 0) + 1);
-      await GG.api.storage.set({ settings: s });
-    } catch (e) { /* ignore */ }
-  }
-
-  function maybeSync(mode) {
-    if (!GG.Sync) return;
-    const raw = (state.settings && state.settings.sync) || GG.DEFAULTS.sync;
-    const sync = (GG.Sync.normalizeTriggers ? GG.Sync.normalizeTriggers(raw) : raw);
-    if (!sync.enabled || !sync.triggers.includes(mode)) {
-      if (window.location && window.location.href.indexOf('newtab') !== -1) {
-        console.log('[gg-sync] maybeSync 跳过', mode, 'enabled=', sync.enabled, 'triggers=', sync.triggers);
-      }
-      return;
-    }
-    // 卡片更改：先打本地变更时间戳，确保稍后同步能判定为「本地较新」而上传
-    if (mode === 'cardChange') markLocalCardChanged();
-    // 防抖：短时间内多次变更只同步一次。
-    // 用较长的 30s 窗口合并连续操作（如拖动卡片、连点保存），避免每次变更都上传一次。
-    if (syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(() => {
-      syncTimer = null;
-      doAutoSync(SYNC_SOURCE[mode] || mode);
-    }, 30000);
-  }
-
-  // 自动同步统一入口：双向策略下先比较再决定上传/下载；冲突时提示用户到设置页处理
-  async function doAutoSync(source) {
-    if (!GG.Sync || !GG.Sync.smartSync) return;
-    const filename = ((state.settings && state.settings.sync && state.settings.sync.filename) || 'ggbookmark-config.json');
-    const base = { source: source || '手动', target: 'webdav', filename };
-    try {
-      const r = await GG.Sync.smartSync({ source });
-      if (r.action === 'uploaded') {
-        if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'upload', ok: true, msg: '上传成功（' + (r.bookmarkCount != null ? r.bookmarkCount + ' 个书签' : '') + '）' })).catch(() => {});
-        GG.toast.show((source ? source + '：' : '') + '已上传到服务器', 'success');
-      } else if (r.action === 'downloaded') {
-        if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'download', ok: true, msg: '远端较新，已下载并应用' })).catch(() => {});
-        GG.toast.show((source ? source + '：' : '') + '远端较新，已下载并应用', 'success');
-        reloadAndRender();
-      } else if (r.action === 'in-sync') {
-        // 已是最新：给出轻量提示，避免用户误以为同步没有触发
-        GG.toast.show((source ? source + '：' : '') + '本地与远端已是最新', 'info');
-      } else if (r.action === 'conflict' || r.action === 'big-change') {
-        const what = r.action === 'conflict' ? '本地与远端均有修改（冲突）' : '远端变更超过 20%';
-        if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'other', ok: false, msg: what + '，请到设置页处理' })).catch(() => {});
-        GG.toast.show((source ? source + '：' : '') + what + '，请到「设置 → 同步」选择处理方式', 'error');
-      }
-    } catch (e) {
-      if (GG.Sync.log) GG.Sync.log(Object.assign({}, base, { type: 'upload', ok: false, msg: '同步失败：' + (e && e.message) })).catch(() => {});
-      GG.toast.show((source ? source + '失败：' : '同步失败：') + (e && e.message), 'error');
-    }
-  }
 
   // ---------- Search ----------
   function renderSearchEngine() {
@@ -368,11 +303,25 @@
         e.dataTransfer.effectAllowed = 'move';
         el.classList.add('dragging');
       });
-      el.addEventListener('dragend', () => el.classList.remove('dragging'));
-      el.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes(PIN_MIME)) e.preventDefault(); });
+      el.addEventListener('dragend', () => {
+        el.classList.remove('dragging');
+        document.querySelectorAll('.pin-item.drop-target').forEach((p) => p.classList.remove('drop-target'));
+      });
+      el.addEventListener('dragover', (e) => {
+        if (!e.dataTransfer.types.includes(PIN_MIME)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        document.querySelectorAll('.pin-item.drop-target').forEach((p) => p.classList.remove('drop-target'));
+        el.classList.add('drop-target');
+      });
+      el.addEventListener('dragleave', (e) => {
+        if (el.contains(e.relatedTarget)) return;
+        el.classList.remove('drop-target');
+      });
       el.addEventListener('drop', (e) => {
         if (!e.dataTransfer.types.includes(PIN_MIME)) return;
         e.preventDefault();
+        el.classList.remove('drop-target');
         const from = Number(e.dataTransfer.getData(PIN_MIME));
         const to = idx;
         if (from === to) return;
@@ -382,7 +331,6 @@
         state.pinned = arr;
         persist();
         renderPinbar();
-        maybeSync('cardChange');
       });
 
       pinbarItems.appendChild(el);
@@ -424,7 +372,6 @@
     state.pinned.splice(idx, 1);
     persist();
     renderPinbar();
-    maybeSync('cardChange');
   }
   function editPin(idx) {
     const pin = state.pinned[idx];
@@ -439,7 +386,6 @@
         persist();
         renderPinbar();
         GG.toast.show('已更新置顶', 'success');
-        maybeSync('cardChange');
       }
     });
   }
@@ -449,7 +395,6 @@
       state.pinned.push({ id: 'pin_' + Date.now(), url, title: title || '' });
       persist();
       renderPinbar();
-      maybeSync('cardChange');
     }
   }
   function wirePinbar() {
@@ -463,7 +408,6 @@
       persist();
       renderPinbar();
       GG.toast.show('已清除所有置顶', 'success');
-      maybeSync('cardChange');
     });
   }
   // 从书签选择置顶项（+ 按钮）：引导输入网址，或提示右键书签项置顶
@@ -540,7 +484,6 @@
     cat.name = name.trim();
     persist();
     renderCats();
-    maybeSync('cardChange');
   }
 
   function setActiveCategory(id) {
@@ -558,7 +501,6 @@
     state.categories.push({ id: 'cat_' + Date.now(), name: name.trim() });
     persist();
     renderCats();
-    maybeSync('cardChange');
   }
 
   function removeCategory(id) {
@@ -571,7 +513,6 @@
     }
     pushUndo({ type: 'removeCategory', categoryId: id, apps: removed, name: removed.length });
     persist().then(renderAll);
-    maybeSync('cardChange');
   }
 
   // ---------- Cards (apps) ----------
@@ -767,7 +708,6 @@
     if (!app.excluded.includes(url)) {
       app.excluded.push(url);
       persist();
-      maybeSync('cardChange');
     }
   }
 
@@ -995,7 +935,6 @@
       applyCompact(card, app);
       syncCompactBtnCard();
       persist();
-      maybeSync('cardChange');
     });
     applyCompact(card, app);
     return card;
@@ -1026,7 +965,6 @@
         app.title = newTitle;
         persist();
         GG.api.bookmarks.update(app.folderId, { title: newTitle }).catch(() => {});
-        maybeSync('cardChange');
       }
       titleEl.textContent = app.title;
     };
@@ -1146,7 +1084,6 @@
     persist();
     renderCards();
     GG.toast.show('已按子项数量调整所有卡片高度', 'success');
-    maybeSync('cardChange');
   }
 
   // Global "view" menu: batch-set compact mode / fit mode on every card.
@@ -1187,13 +1124,11 @@
     persist(); renderCards();
     const label = val === 'on' ? '已设置所有卡片为紧凑开启' : (val === 'off' ? '已设置所有卡片为紧凑关闭' : '已恢复所有卡片为紧凑自动');
     GG.toast.show(label, 'success');
-    maybeSync('cardChange');
   }
   function applyGlobalFit(val) {
     state.apps.forEach((a) => { a.fitMode = val === 'auto' ? 'auto' : 'fixed'; });
     persist(); renderCards();
     GG.toast.show(val === 'auto' ? '已设置所有卡片为自适应高度' : '已设置所有卡片为固定高度', 'success');
-    maybeSync('cardChange');
   }
   function syncViewMenu() {
     const menu = $('#viewMenu');
@@ -1285,8 +1220,8 @@
       menu.appendChild(b);
     };
     add('重新选择文件夹', 'folder', () => openPicker(card, app));
-    add('包含子文件夹', 'selectSon', () => { app.recursive = !app.recursive; persist(); renderCards(); maybeSync('cardChange'); });
-    add('重命名', 'rename', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); maybeSync('cardChange'); } });
+    add('包含子文件夹', 'selectSon', () => { app.recursive = !app.recursive; persist(); renderCards(); });
+    add('重命名', 'rename', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
     more.innerHTML = GG.icon('settings');
     more.addEventListener('click', (e) => { e.stopPropagation(); openMenu(menu, more); });
@@ -1297,7 +1232,6 @@
     state.apps = state.apps.filter((a) => a.id !== app.id);
     cardOrder = cardOrder.filter((o) => o.appId !== app.id);
     persist().then(renderAll);
-    maybeSync('cardChange');
   }
 
   // ---------- Card header drag (reorder + free column placement) ----------
@@ -1400,7 +1334,6 @@
     cardOrder = newOrder;
     pushUndo({ type: 'reorder', from: prevOrder, to: cardOrder.slice() });
     persist().then(renderCards);
-    maybeSync('cardChange');
   }
 
   // Allow dropping anywhere inside a column. The whole column highlights as a
@@ -1767,7 +1700,6 @@
         app.folderId = selectedFolderId;
         app.recursive = $('#pickerRecursive').checked; // 同步「包含子文件夹」状态
         persist().then(renderCards);
-        maybeSync('cardChange');
       });
     } else {
       // new card
@@ -1788,7 +1720,6 @@
         state.apps.push(newApp);
         appendOrder(newApp.id);
         persist().then(renderCards);
-        maybeSync('cardChange');
       });
     }
     closePicker();
@@ -2324,7 +2255,7 @@
     // listen for settings / data changes from settings page (import / clear)
     GG.api.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
-      const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat'].some((k) => k in changes);
+      const cardsChanged = ['apps', 'categories', 'orderByCat', 'activeCat', 'pinned'].some((k) => k in changes);
       if (changes.settings) {
         const prevSettings = state.settings;
         const nextSettings = changes.settings.newValue || {};
@@ -2347,7 +2278,8 @@
           if (prevCols !== state.settings.cardCols || prevMinW !== state.settings.cardMinWidth) renderCards();
           else if (prevFavicon !== state.settings.faviconSource) renderCards(); // 图标来源变化需重绘
           else renderCards(); // refresh compact state from global setting
-          maybeSync('settingsChange');
+          // 设置变更同步由后台统一触发（见 lib/sync.js handleSettingsChange），
+          // 避免多个 newtab 标签页各自触发导致重复上传。
         }
       }
       if (cardsChanged) {

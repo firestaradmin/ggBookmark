@@ -108,6 +108,7 @@ body {
 }
 .pin-item:hover { background: var(--glass-strong); border-color: rgba(255,255,255,.22); }
 .pin-item.dragging { opacity: .4; }
+.pin-item.drop-target { background: var(--glass-strong); border-color: var(--accent); outline: 1px solid var(--accent); }
 .pin-item .pin-ico {
   width: 18px; height: 18px;
   border-radius: 4px;
