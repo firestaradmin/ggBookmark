@@ -299,6 +299,7 @@
       el.addEventListener('click', (e) => {
         // Ctrl/Cmd + 左键：后台打开，停留在本页
         if (e.ctrlKey || e.metaKey) { GG.api.tabs.create({ url: pin.url, active: false }); return; }
+        if (state.settings && state.settings.openInPlace) { GG.api.tabs.update({ url: pin.url }); return; }
         GG.api.tabs.create({ url: pin.url });
       });
       el.addEventListener('auxclick', (e) => {
@@ -582,6 +583,7 @@
         if (e.target.closest('.tile-more')) return;
         // Ctrl/Cmd + 左键：后台打开，停留在本页
         if (e.ctrlKey || e.metaKey) { GG.api.tabs.create({ url: bm.url, active: false }); return; }
+        if (state.settings && state.settings.openInPlace) { GG.api.tabs.update({ url: bm.url }); return; }
         GG.api.tabs.create({ url: bm.url });
       });
       // 中键：后台打开

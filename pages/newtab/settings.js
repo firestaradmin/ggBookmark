@@ -857,6 +857,7 @@
     $('#seSelect').value = settings.searchEngine || 'bing';
     $('#fontSize').value = settings.fontSize || 'medium';
     if ($('#faviconSource')) $('#faviconSource').value = settings.faviconSource || GG.DEFAULTS.faviconSource;
+    if ($('#openInPlace')) $('#openInPlace').checked = !!settings.openInPlace;
     buildColors();
     buildGlassColors();
     buildBgColors();
@@ -1231,6 +1232,7 @@
       settings.searchEngine = $('#seSelect').value;
       settings.fontSize = $('#fontSize').value;
       settings.faviconSource = $('#faviconSource') ? $('#faviconSource').value : GG.DEFAULTS.faviconSource;
+      settings.openInPlace = $('#openInPlace') ? $('#openInPlace').checked : false;
       settings.bookmarkImportFolder = $('#importFolderSelect').value || '';
       const activeTheme = document.querySelector('.theme-btn.active');
       if (activeTheme) settings.theme = activeTheme.dataset.theme;
@@ -1239,7 +1241,7 @@
       if (GG.Sync && GG.Sync.encryptPassword && settings.sync.password) {
         settings.sync.password = await GG.Sync.encryptPassword(settings.sync.password);
       }
-      const activeDot = document.querySelector('.color-dot.active');
+      const activeDot = document.querySelector('#colors .color-dot.active');
       if (activeDot) settings.accentColor = activeDot.dataset.color;
       // 记录本地变更时间，供同步冲突判定；确保严格大于上次同步点，避免同毫秒误判
       settings.lastLocalChangeAt = Math.max(Date.now(), (settings.lastSyncAt || 0) + 1);
