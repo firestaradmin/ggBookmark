@@ -99,7 +99,8 @@ html[data-theme="light"] .gg-bg[data-style="gradient"] {
   background-image: linear-gradient(135deg, #c7d4ee 0%, #d9d2f0 50%, #cfe9e6 100%);
 }
 html[data-theme="light"] .gg-bg[data-style="image"]::after,
-html[data-theme="light"] .gg-bg[data-style="gradient"]::after {
+html[data-theme="light"] .gg-bg[data-style="gradient"]::after,
+html[data-theme="light"] .gg-bg[data-style="color"]::after {
   background-color: rgba(255, 255, 255, var(--bg-dim, 0.35));
 }
 /* 明亮模式下，原硬编码的白色文字/边框改为深色，保证可读性 */
@@ -132,6 +133,20 @@ html[data-theme="light"] .searchwrap input::placeholder { color: #8a97b3; }
 .gg-bg[data-style="image"]::after,
 .gg-bg[data-style="gradient"]::after {
   /* dark overlay on top of the (blurred) image/gradient to keep text readable */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: rgba(8, 13, 26, var(--bg-dim, 0.35));
+}
+.gg-bg[data-style="color"] {
+  background-color: var(--bg-color, #141b2d);
+  background-image: none;
+  transform: scale(1.06);
+  filter: blur(var(--bg-blur, 0px)) saturate(120%);
+}
+.gg-bg[data-style="color"]::after {
+  /* dim overlay so text stays readable on lighter custom colors */
   content: "";
   position: absolute;
   inset: 0;

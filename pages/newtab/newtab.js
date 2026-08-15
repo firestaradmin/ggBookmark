@@ -137,10 +137,16 @@
     const bg = $('.gg-bg');
     const s = state.settings;
     const hasImage = (s.backgroundStyle === 'image' || s.backgroundStyle === 'preset') && s.backgroundImage;
-    bg.dataset.style = hasImage ? 'image' : (s.backgroundStyle === 'gradient' ? 'gradient' : 'default');
+    bg.dataset.style = hasImage ? 'image'
+      : (s.backgroundStyle === 'color' ? 'color'
+      : (s.backgroundStyle === 'gradient' ? 'gradient' : 'default'));
     bg.style.setProperty('--bg-image', `url("${await resolveBgImage(s.backgroundImage)}")`);
     bg.style.setProperty('--bg-blur', `${s.backgroundBlur || 0}px`);
     bg.style.setProperty('--bg-dim', `${s.backgroundDim ?? 0.15}`);
+    // 纯色背景：从 backgroundImage（color:#hex 引用）解析出颜色
+    if (s.backgroundStyle === 'color' && s.backgroundImage && s.backgroundImage.startsWith('color:')) {
+      bg.style.setProperty('--bg-color', s.backgroundImage.slice('color:'.length));
+    }
     document.documentElement.style.setProperty('--accent-color', s.accentColor);
     document.documentElement.style.setProperty('--accent', s.accentColor);
     document.documentElement.style.setProperty('--accent-2', s.accentColor);

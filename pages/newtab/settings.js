@@ -5,6 +5,8 @@
   const ACCENTS = ['#4f7cff', '#7a5bff', '#00c6a7', '#ff7a59', '#f54d6a', '#ffb84d', '#4f9fff'];
   // 卡片背景预设色：黑白灰基础色 + 多色系淡色（共 8 个）
   const GLASS_COLORS = ['#ffffff', '#e8ecf5', '#8b93a8', '#0c1220', '#dbe7ff', '#ffd9d9', '#dff3e3', '#ffeec2'];
+  // 纯色背景预设色：8 个流行的深色系背景色
+  const BG_COLORS = ['#141b2d', '#1a1a2e', '#16213e', '#0f3460', '#222831', '#2d1b3d', '#1b263b', '#0b2e1f'];
   const $ = (s) => document.querySelector(s);
   let settings = {};
   // 同步引擎自动维护的元数据字段：保存设置时不得被页面内存旧值覆盖，否则下次同步会误判远端变更。
@@ -43,7 +45,8 @@
   let currentPreset = ''; // 当前选中的预设壁纸（preset: 引用），与 #bgUrl 输入框分离
   const PRESET_PREFIX = 'preset:';
   const BLOB_PREFIX = 'blob:'; // 自定义本地图片：settings 只存 blob:文件名 引用，实际图片数据存 IndexedDB
-
+  const COLOR_PREFIX = 'color:'; // 纯色背景：settings 存 color:#hex 引用
+  let currentBgColor = ''; // 当前选中的纯色背景色（color:#hex 引用）
   // ---------- 自定义背景图数据（IndexedDB），避免把大 data URL 存进 chrome.storage ----------
   const BG_DB = 'gg-bookmark';
   const BG_STORE = 'backgroundImages';
@@ -113,6 +116,12 @@
   function presetRef(name) {
     return PRESET_PREFIX + name;
   }
+  function colorFromValue(value) {
+    return value && value.startsWith(COLOR_PREFIX) ? value.slice(COLOR_PREFIX.length) : null;
+  }
+  function colorRef(hex) {
+    return COLOR_PREFIX + normalizeHex(hex);
+  }
 
   async function applyBgPreview() {
     const bg = $('.gg-bg');
@@ -138,6 +147,10 @@
       bg.style.setProperty('--bg-image', `url("${imgUrl}")`);
     } else if (currentStyle === 'gradient') {
       bg.dataset.style = 'gradient';
+    } else if (currentStyle === 'color') {
+      const hex = colorFromValue(currentBgColor) || $('#bgColor').value || '#141b2d';
+      bg.dataset.style = 'color';
+      bg.style.setProperty('--bg-color', hex);
     } else {
       bg.dataset.style = 'default';
     }
@@ -241,6 +254,7 @@
   // ---------- 自定义颜色选择器（RGB 圆形取色） ----------
   let cpState = { h: 0, s: 100, l: 50, hex: '#ffffff' };
   let cpActive = false; // 是否为“拖动中”，避免鼠标事件竞争
+  let cpTarget = 'glass'; // 取色器当前目标：'glass' 卡片背景 | 'bg' 纯色背景
 
   function openColorPicker(hex) {
     const ov = $('#cpOverlay');
@@ -319,13 +333,26 @@
   function applyCpToGlass() {
     const { r, g, b } = hslToRgb(cpState.h, cpState.s, cpState.l);
     cpState.hex = rgbToHex(r, g, b);
-    const input = $('#glassColor');
-    if (input) input.value = cpState.hex;
-    const hexInput = $('#glassColorHex');
-    if (hexInput) hexInput.value = cpState.hex;
-    applyGlassPreview();
-    const swatch = $('#ccSwatch');
-    if (swatch) swatch.style.background = cpState.hex;
+    if (cpTarget === 'bg') {
+      // 应用到纯色背景
+      const input = $('#bgColor');
+      if (input) input.value = cpState.hex;
+      const hexInput = $('#bgColorHex');
+      if (hexInput) hexInput.value = cpState.hex;
+      const swatch = $('#ccBgSwatch');
+      if (swatch) swatch.style.background = cpState.hex;
+      currentBgColor = colorRef(cpState.hex);
+      applyBgPreview();
+    } else {
+      // 应用到卡片背景
+      const input = $('#glassColor');
+      if (input) input.value = cpState.hex;
+      const hexInput = $('#glassColorHex');
+      if (hexInput) hexInput.value = cpState.hex;
+      applyGlassPreview();
+      const swatch = $('#ccSwatch');
+      if (swatch) swatch.style.background = cpState.hex;
+    }
     renderCpFields();
   }
   // 根据 hex 更新 cpState 并重绘
@@ -345,11 +372,21 @@
     const swatch = $('#ccSwatch');
     if (!ov) return;
 
-    // 打开
+    // 打开（卡片背景）
     swatch.addEventListener('click', () => {
+      cpTarget = 'glass';
       const cur = $('#glassColor') ? $('#glassColor').value : '#ffeec2';
       openColorPicker(cur);
     });
+    // 打开（纯色背景）
+    const bgSwatch = $('#ccBgSwatch');
+    if (bgSwatch) {
+      bgSwatch.addEventListener('click', () => {
+        cpTarget = 'bg';
+        const cur = $('#bgColor') ? $('#bgColor').value : '#141b2d';
+        openColorPicker(cur);
+      });
+    }
     // 关闭
     $('#cpClose').addEventListener('click', closeColorPicker);
     $('#cpCancel').addEventListener('click', () => {
@@ -474,6 +511,34 @@
         const input = $('#glassColor');
         if (input) input.value = color;
         applyGlassPreview();
+      });
+      c.appendChild(d);
+    });
+  }
+
+  // 纯色背景预设色：点击即应用并写回输入框 / 实时预览
+  function buildBgColors() {
+    const c = $('#bgColors');
+    if (!c) return;
+    c.innerHTML = '';
+    BG_COLORS.forEach((color) => {
+      const d = document.createElement('span');
+      d.className = 'color-dot';
+      d.style.background = color;
+      d.dataset.color = color;
+      const curHex = colorFromValue(currentBgColor) || ($('#bgColor') ? $('#bgColor').value : '');
+      if (color.toLowerCase() === (curHex || '').toLowerCase()) d.classList.add('active');
+      d.addEventListener('click', () => {
+        c.querySelectorAll('.color-dot').forEach((x) => x.classList.remove('active'));
+        d.classList.add('active');
+        const input = $('#bgColor');
+        if (input) input.value = color;
+        const hexInput = $('#bgColorHex');
+        if (hexInput) hexInput.value = color;
+        const swatch = $('#ccBgSwatch');
+        if (swatch) swatch.style.background = color;
+        currentBgColor = colorRef(color);
+        applyBgPreview();
       });
       c.appendChild(d);
     });
@@ -724,6 +789,7 @@
   function syncBgSegActive() {
     const seg = settings.backgroundStyle === 'preset' ? 'preset'
               : settings.backgroundStyle === 'image' ? 'image'
+              : settings.backgroundStyle === 'color' ? 'color'
               : settings.backgroundStyle === 'gradient' ? 'gradient' : 'default';
     document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === seg));
   }
@@ -732,20 +798,23 @@
     const style = (document.querySelector('.seg-btn[data-bg].active') || {}).dataset?.bg || 'default';
     const imageField = document.getElementById('imageSourceField');
     const presetField = document.getElementById('presetField');
+    const colorField = document.getElementById('colorField');
     const preview = document.getElementById('bgPreview');
     const hint = document.getElementById('bgHint');
     if (imageField) imageField.style.display = style === 'image' ? '' : 'none';
     if (presetField) presetField.style.display = style === 'preset' ? '' : 'none';
+    if (colorField) colorField.style.display = style === 'color' ? '' : 'none';
     // 预览仅在“自定义图片”下显示；预设壁纸只显示缩略图网格
     if (preview) {
       if (style === 'image') preview.classList.remove('hidden');
       else preview.classList.add('hidden');
     }
-    if (hint) hint.style.display = (style === 'image' || style === 'preset') ? '' : 'none';
+    if (hint) hint.style.display = (style === 'image' || style === 'preset' || style === 'color') ? '' : 'none';
   }
   async function load() {
     const seg = settings.backgroundStyle === 'preset' ? 'preset'
               : settings.backgroundStyle === 'image' ? 'image'
+              : settings.backgroundStyle === 'color' ? 'color'
               : settings.backgroundStyle === 'gradient' ? 'gradient' : 'default';
     document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === seg));
     const bgImageVal = settings.backgroundImage || '';
@@ -773,12 +842,24 @@
     $('#glassBlur').value = settings.glassBlur ?? 20;
     $('#glassOpacity').value = settings.glassOpacity ?? 0.06;
     applyGlassPreview();
+    // 初始化纯色背景状态
+    const savedColor = settings.backgroundImage && settings.backgroundImage.startsWith(COLOR_PREFIX)
+      ? settings.backgroundImage : '';
+    currentBgColor = savedColor;
+    const initBgHex = colorFromValue(savedColor) || '#141b2d';
+    const bgColorInput = $('#bgColor');
+    if (bgColorInput) bgColorInput.value = initBgHex;
+    const bgColorHex = $('#bgColorHex');
+    if (bgColorHex) bgColorHex.value = initBgHex;
+    const bgSwatch = $('#ccBgSwatch');
+    if (bgSwatch) bgSwatch.style.background = initBgHex;
     buildSeSelect();
     $('#seSelect').value = settings.searchEngine || 'bing';
     $('#fontSize').value = settings.fontSize || 'medium';
     if ($('#faviconSource')) $('#faviconSource').value = settings.faviconSource || GG.DEFAULTS.faviconSource;
     buildColors();
     buildGlassColors();
+    buildBgColors();
     buildPresets();
     buildImportFolderSelect();
     document.documentElement.style.setProperty('--accent', settings.accentColor);
@@ -1001,12 +1082,16 @@
       b.addEventListener('click', () => {
         document.querySelectorAll('.seg-btn[data-bg]').forEach((x) => x.classList.remove('active'));
         b.classList.add('active');
-        if (b.dataset.bg !== 'image' && b.dataset.bg !== 'preset') {
+        if (b.dataset.bg !== 'image' && b.dataset.bg !== 'preset' && b.dataset.bg !== 'color') {
           settings.backgroundImage = '';
         }
         if (b.dataset.bg === 'preset') {
           // 切换到预设壁纸：若已有预设选择则应用，否则等用户点缩略图
           if (currentPreset) { settings.backgroundImage = currentPreset; }
+        }
+        if (b.dataset.bg === 'color') {
+          // 切换到纯色背景：应用当前选中颜色
+          if (currentBgColor) { settings.backgroundImage = currentBgColor; }
         }
         if (b.dataset.bg === 'image') {
           // 切换到自定义图片：仅当输入框有真实 URL 时采用；预设引用不再塞入输入框
@@ -1018,6 +1103,13 @@
         applyBgPreview();
         updatePreview();
         markActivePreset();
+        // 切换时同步预设色选中态
+        if ($('#bgColors')) {
+          const curHex = colorFromValue(currentBgColor) || ($('#bgColor') ? $('#bgColor').value : '');
+          document.querySelectorAll('#bgColors .color-dot').forEach((x) => {
+            x.classList.toggle('active', !!curHex && x.dataset.color.toLowerCase() === curHex.toLowerCase());
+          });
+        }
       });
     });
 
@@ -1082,6 +1174,38 @@
         }
       });
     }
+    // 纯色背景自定义颜色 hex 输入：边输入边校验（合法则实时应用），失焦时回填规范化值
+    const bgHex = $('#bgColorHex');
+    if (bgHex) {
+      bgHex.addEventListener('input', () => {
+        const n = normalizeHex(bgHex.value);
+        bgHex.classList.toggle('invalid', !!bgHex.value && !n);
+        if (n) {
+          const colorInput = $('#bgColor');
+          if (colorInput && colorInput.value !== n) colorInput.value = n;
+          currentBgColor = colorRef(n);
+          applyBgPreview();
+        }
+      });
+      bgHex.addEventListener('blur', () => {
+        const n = normalizeHex(bgHex.value);
+        if (n) {
+          bgHex.value = n;
+          const colorInput = $('#bgColor');
+          if (colorInput) colorInput.value = n;
+          currentBgColor = colorRef(n);
+          applyBgPreview();
+        }
+        bgHex.classList.remove('invalid');
+      });
+      bgHex.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const n = normalizeHex(bgHex.value);
+          if (n) { bgHex.value = n; $('#bgColor').value = n; currentBgColor = colorRef(n); applyBgPreview(); }
+          bgHex.blur();
+        }
+      });
+    }
 
     $('#btnSave').addEventListener('click', async () => {
       const bgActive = document.querySelector('.seg-btn[data-bg].active');
@@ -1090,6 +1214,10 @@
         settings.backgroundImage = currentPreset || '';
       } else if (settings.backgroundStyle === 'image') {
         settings.backgroundImage = $('#bgUrl').value.trim() || '';
+      } else if (settings.backgroundStyle === 'color') {
+        const hex = normalizeHex($('#bgColor').value) || colorFromValue(currentBgColor) || '#141b2d';
+        currentBgColor = colorRef(hex);
+        settings.backgroundImage = currentBgColor;
       } else {
         settings.backgroundImage = '';
       }
@@ -1130,6 +1258,7 @@
         settings.backgroundDim = 0.15;
         $('#bgUrl').value = '';
         currentPreset = '';
+        currentBgColor = '';
         $('#bgBlur').value = 0;
         $('#bgDim').value = 0.15;
         document.querySelectorAll('.seg-btn').forEach((b) => b.classList.toggle('active', b.dataset.bg === 'default'));

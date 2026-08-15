@@ -151,6 +151,7 @@
               <button data-bg="gradient" class="seg-btn">深色渐变</button>
               <button data-bg="preset" class="seg-btn">预设壁纸</button>
               <button data-bg="image" class="seg-btn">自定义图片</button>
+              <button data-bg="color" class="seg-btn">纯色背景</button>
             </div>
           </div>
           <div class="field" id="imageSourceField">
@@ -169,7 +170,17 @@
             <span class="f-title">预设壁纸</span>
             <div class="preset-grid" id="presetGrid"></div>
           </div>
-          <div class="hint" id="bgHint">选择“自定义图片”或“预设壁纸”后，点击下方缩略图即可应用。</div>
+          <div class="field col" id="colorField">
+            <span class="f-title">背景颜色</span>
+            <div class="colors" id="bgColors"></div>
+            <div class="color-custom">
+              <label class="cc-label" for="bgColorHex">自定义</label>
+              <button class="cc-swatch" id="ccBgSwatch" type="button" title="打开颜色选择器"></button>
+              <input id="bgColorHex" class="hex-input" type="text" value="#141b2d" spellcheck="false" autocomplete="off" title="直接输入十六进制颜色值，如 #141b2d">
+              <input id="bgColor" type="hidden" value="#141b2d">
+            </div>
+          </div>
+          <div class="hint" id="bgHint">选择“自定义图片”或“预设壁纸”后，点击下方缩略图即可应用；选择“纯色背景”可直接选用预设色或自定义颜色。</div>
           <div class="field">
             <span class="f-title">模糊程度</span>
             <input id="bgBlur" type="range" min="0" max="40" step="1">
