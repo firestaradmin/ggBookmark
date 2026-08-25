@@ -1822,6 +1822,8 @@
       const recChk = overlay.querySelector('.c-recursive input');
 
       input.addEventListener('input', () => {
+        // 中文输入法下按反引号键会输入「·」，此时视为关闭面板的快捷键
+        if (/[·・、]/.test(input.value)) { close(); return; }
         overlay.querySelector('.allbm-search').classList.toggle('has-q', !!input.value);
         render(input.value.trim());
       });
@@ -2103,20 +2105,22 @@
 
     btn.addEventListener('click', (e) => { e.stopPropagation(); open(); });
 
-    // 全局快捷键：` 或 ~ 切换浮窗。
-    // - 浮窗未开：任何输入框外按 ` 直接打开。
-    // - 浮窗已开：焦点在搜索框时 ` 视为正常输入；焦点不在输入框（如点了条目后）按 ` 关闭。
+    // 全局快捷键：按「反引号」物理键（数字 1 左侧）切换浮窗。
+    // - 英文输入法：keydown 直接触发，可开/关并屏蔽字符。
+    // - 中文输入法：keydown 无法可靠拦截，由搜索框的 input 检测到「·」后关闭面板（见 search input 监听）。
+    // - 浮窗未开：任何输入框外按该键直接打开；空输入框按该键也打开，已有关键词则不劫持。
     document.addEventListener('keydown', (e) => {
-      if (e.key !== '`' && e.key !== '~') return;
+      if (e.code !== 'Backquote') return;
       if (e.ctrlKey || e.altKey || e.metaKey) return;
       const inField = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
       if (overlay) {
-        if (inField) return; // 搜索框内可正常输入 ` 字符
+        // 面板打开时屏蔽该按键，直接关闭，避免在搜索框输入字符
         e.preventDefault();
+        e.stopPropagation();
         close();
         return;
       }
-      // 输入框已有关键词时不劫持（正常输入 ` 字符）；空输入框按 ` 则打开浮窗
+      // 输入框已有关键词时不劫持（正常输入）；空输入框按该键则打开浮窗
       if (inField && e.target.value) return;
       e.preventDefault();
       open();
