@@ -1638,8 +1638,10 @@
             time.className = 'v-time';
             time.textContent = fmtTime(v.time);
             const count = document.createElement('span');
-            count.className = 'v-count loading';
-            count.textContent = '读取中…';
+            count.className = 'v-count' + (v.bookmarkCount == null ? ' loading' : '');
+            count.textContent = v.bookmarkCount != null
+              ? (v.bookmarkCount + ' 个书签')
+              : '读取中…';
             const btn = document.createElement('button');
             btn.className = 'btn';
             btn.textContent = '下载此版本';
@@ -1661,17 +1663,19 @@
             item.appendChild(count);
             item.appendChild(btn);
             box.appendChild(item);
-            // 异步补充书签数量（读取该版本文件头部的统计字段）
-            GG.Sync.downloadVersion(null, v.name).then((cfgData) => {
-              const cnt = cfgData && cfgData.bookmarkCount != null
-                ? cfgData.bookmarkCount
-                : (GG.Sync.countBookmarksInConfig ? GG.Sync.countBookmarksInConfig(cfgData).bookmarkCount : null);
-              count.classList.remove('loading');
-              count.textContent = cnt != null ? (cnt + ' 个书签') : '';
-            }).catch(() => {
-              count.classList.remove('loading');
-              count.textContent = v.size != null ? (Math.round(v.size / 1024) + ' KB') : '';
-            });
+            // 旧版本文件名未含书签数量时，降级：下载文件读取统计字段
+            if (v.bookmarkCount == null) {
+              GG.Sync.downloadVersion(null, v.name).then((cfgData) => {
+                const cnt = cfgData && cfgData.bookmarkCount != null
+                  ? cfgData.bookmarkCount
+                  : (GG.Sync.countBookmarksInConfig ? GG.Sync.countBookmarksInConfig(cfgData).bookmarkCount : null);
+                count.classList.remove('loading');
+                count.textContent = cnt != null ? (cnt + ' 个书签') : '';
+              }).catch(() => {
+                count.classList.remove('loading');
+                count.textContent = v.size != null ? (Math.round(v.size / 1024) + ' KB') : '';
+              });
+            }
           });
         } catch (e) {
           box.innerHTML = '<div class="version-empty">读取失败：' + escapeHtml(e && e.message ? e.message : '未知错误') + '</div>';
