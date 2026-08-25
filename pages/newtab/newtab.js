@@ -2269,6 +2269,43 @@
     box.hidden = false;
   }
 
+  // 当用户在页面主体（非输入框、非弹层/菜单/面板）直接敲打可打印字符时，
+  // 视为有搜索意图，自动把焦点移到顶部搜索栏并把当前按键字符带入。
+  function wireTypeToSearch() {
+    const input = $('#searchInput');
+    if (!input) return;
+    // 当前是否存在需要屏蔽自动聚焦的弹层 / 菜单 / 面板
+    const popupOpen = () => (
+      document.querySelector('#seMenu.open, #viewMenu.open, .cat-ctx, .tile-ctx, .pin-ctx, .grid-ctx, .allbm-overlay') ||
+      document.querySelector('#ntSettings.open') ||
+      !document.querySelector('#folderPickerWrap')?.classList.contains('hidden') ||
+      !document.querySelector('#cpOverlay')?.classList.contains('hidden')
+    );
+    const isFormField = (t) =>
+      t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;        // 保留 Ctrl/Cmd/Alt 快捷键
+      if (e.isComposing) return;                             // 输入法组合中不抢焦点
+      if (isFormField(e.target)) return;                     // 已在输入框中
+      if (popupOpen()) return;                               // 有弹层/菜单/面板时不动
+      const key = e.key;
+      if (key.length !== 1) return;                          // 仅处理单个可打印字符
+      if (e.code === 'Backquote') return;                    // 反引号键保留为面板快捷键，不带入搜索栏
+      // 聚焦搜索栏并把该字符带入
+      e.preventDefault();
+      input.focus();
+      const val = input.value;
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      input.value = val.slice(0, start) + key + val.slice(end);
+      const caret = start + key.length;
+      input.setSelectionRange(caret, caret);
+      // 触发输入事件以刷新搜索提示与渲染
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
   // ---------- Init ----------
   async function init() {
     await loadPersistent();
@@ -2313,6 +2350,11 @@
     document.addEventListener('scroll', closeTileMenu, true);
     document.addEventListener('scroll', closePinMenu, true);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatMenu(); closeGridMenu(); closeTileMenu(); closePinMenu(); } });
+
+    // 用户有输入文字的意图时（在非输入框处按下可打印字符键），自动聚焦顶部搜索栏，
+    // 并把当前按键对应的字符带入搜索栏。
+    wireTypeToSearch();
+
     renderAll();
 
     // listen for settings / data changes from settings page (import / clear)
