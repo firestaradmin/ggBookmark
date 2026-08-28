@@ -463,7 +463,6 @@
     item.addEventListener('drop', (e) => {
       e.preventDefault(); e.stopPropagation();
       item.classList.remove('drop-before', 'drop-after', 'drop-into');
-      console.log('[gg-drop] 触发 drop', { dragIds: sel.dragIds, from: sel.dragFromFolder, toFolder: p.folderId, target: node.title, targetType: node.type });
       if (!sel.dragIds.length) return;
       const r = item.getBoundingClientRect();
       const frac = (e.clientY - r.top) / Math.max(1, r.height);
@@ -529,7 +528,6 @@
   // === REORDER / MOVE / DELETE ===
   async function reorderWithin(p, refItem, clientY) {
     const folderId = p.folderId;
-    console.log('[gg-reorder] 进入', { refType: refItem && refItem.dataset && refItem.dataset.type, refId: refItem && refItem.dataset && refItem.dataset.id, folderId });
     if (!refItem) return;
     const rect = refItem.getBoundingClientRect();
     const insertBefore = clientY < rect.top + rect.height / 2;
@@ -540,7 +538,6 @@
     const prevOrder = order.slice();
     const rest = order.filter((id) => !ids.includes(id));
     let targetIndex = rest.indexOf(refItem.dataset.id);
-    console.log('[gg-reorder] 计算', { order, rest, targetId: refItem.dataset.id, targetIndex });
     if (targetIndex === -1) return;
     if (!insertBefore) targetIndex += 1;
     const beforeId = rest[targetIndex] !== undefined ? rest[targetIndex] : undefined;
@@ -552,7 +549,6 @@
     if (beforeId === undefined) finalOrder.push(...ids);
     const seen = new Set();
     const clean = finalOrder.filter((id) => (seen.has(id) ? false : (seen.add(id), true)));
-    console.log('[gg-reorder] order=', order, 'ids=', ids, 'rest=', rest, 'targetIdx=', targetIndex, 'clean=', clean, 'prevOrder=', prevOrder);
     if (JSON.stringify(clean) === JSON.stringify(prevOrder)) return;
     for (let i = 0; i < clean.length; i++) await GG.api.bookmarks.move(clean[i], { parentId: folderId, index: i }).catch(() => {});
     pushHistory({ type: 'reorder', folderId, prev: prevOrder, target: clean });

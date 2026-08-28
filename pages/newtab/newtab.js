@@ -194,7 +194,6 @@
     if (!sc) return;
     const maxScroll = sc.scrollWidth - sc.clientWidth;
     const canScroll = maxScroll > 1;
-    console.log('[gg-hscroll]', { scrollW: sc.scrollWidth, clientW: sc.clientWidth, maxScroll, canScroll });
     hscroll.classList.toggle('visible', canScroll);
     if (!canScroll) return;
     const barW = Math.max(30, sc.clientWidth / sc.scrollWidth * 100);
@@ -867,7 +866,6 @@
       grid.appendChild(empty);
     }
     updateHScroll();
-    console.log('[gg-grid]', { cols, clientW: grid.clientWidth, scrollW: grid.scrollWidth, minW: document.documentElement.style.getPropertyValue('--card-min-width'), cardCols: document.documentElement.style.getPropertyValue('--card-cols') });
     // persist normalized col assignments asynchronously (avoid feedback loop)
     if (dirty) persist();
   }
@@ -1454,7 +1452,6 @@
       if (hit) {
         hit.over.classList.add('tile-drop');
         hit.over.dataset.dropPos = hit.dropPos;
-        console.log('[gg-drag] highlight', { target: hit.over.dataset.bookmarkId, dropPos: hit.dropPos, my: e.clientY });
       }
     });
     grid.addEventListener('dragleave', (e) => {
@@ -1482,7 +1479,6 @@
           targetBmId = hit.over.dataset.bookmarkId;
           insertBefore = hit.dropPos === 'before';
         }
-        console.log('[gg-drag] drop', { bmId, folder: card.dataset.folderId, targetBmId, insertBefore, clientY: e.clientY });
         reorderBookmarkInCard(bmId, card.dataset.folderId, targetBmId, insertBefore);
         return;
       }
@@ -1512,7 +1508,6 @@
     }
     arr.splice(targetIndex, 0, bmId);
     const clean = arr;                                 // 目标完整顺序
-    console.log('[gg-drag] reorder', { bmId, folderId, targetBmId, insertBefore, order, clean });
     // 逆序 move：从最后一个到第一个，固定各自目标 index，保证最终顺序为 clean
     let changed = false;
     for (let i = clean.length - 1; i >= 0; i--) {
