@@ -171,6 +171,12 @@ const FAV_CACHE_PREFIX = 'favicon:';
 const favMemCache = new Map();          // key -> dataURL  （内存一级缓存）
 const favStorage = GG.api && GG.api.storage; // chrome.storage.local
 GG.FAVICON_TIMEOUT = 20000; // ms; 图标加载超过该时间仍未成功则放弃，显示首字母
+// favicon 持久化缓存上限：storage.local 默认配额 10MB，这里限制 favicon 缓存总量不超过该值，
+// 避免大量站点的 base64 图片把配额写满，导致 chrome.storage 所有写入失败（kQuotaBytes quota exceeded）。
+const FAV_CACHE_MAX_BYTES = 3 * 1024 * 1024;      // 持久化缓存总量上限（3MB）
+const FAV_CACHE_MAX_ITEM_BYTES = 80 * 1024;       // 单图大小上限：超过则只进内存缓存，不写持久化（防单张大图占满配额）
+// 持久化键的淘汰顺序（写入先后），超限时优先淘汰最旧键
+const favOrder = [];
 
 // 用「来源 + 网站主机名」作为缓存键，避免同一站点多个 URL 重复缓存图标
 function favKey(source, url) {
@@ -192,11 +198,62 @@ async function favLoadFromStorage(key) {
   }
 }
 
-// 把获取到的图片数据写入两级缓存（若仍处于该来源/该 key 有效）
-function favStore(key, dataURL) {
+// 记录/更新某个持久化键的写入顺序（LRU：最近写入排最后，淘汰时从最前删）
+function favTouchOrder(key) {
+  const i = favOrder.indexOf(key);
+  if (i >= 0) favOrder.splice(i, 1);
+  favOrder.push(key);
+}
+
+// 淘汰持久化 favicon 缓存，直到总大小不超过上限。只删最旧的键，不影响当前正在写入的 key。
+async function favEvict(activeKey) {
+  if (!favStorage) return;
+  try {
+    const all = await favStorage.get(null);
+    const total = (all && Object.keys(all)) || [];
+    let sum = 0;
+    const sizes = new Map();
+    for (const k of total) {
+      if (k.startsWith(FAV_CACHE_PREFIX)) {
+        const s = (all[k] && all[k].length) || 0;
+        sizes.set(k, s);
+        sum += s;
+      }
+    }
+    if (sum <= FAV_CACHE_MAX_BYTES) return;
+    // 按写入顺序最旧优先淘汰，直到降到上限以内；当前正在写入的 key 保护不删
+    for (const k of favOrder) {
+      if (sum <= FAV_CACHE_MAX_BYTES) break;
+      if (k === activeKey) continue;
+      if (sizes.has(k)) {
+        await favStorage.remove(k);
+        favMemCache.delete(k);
+        sum -= sizes.get(k);
+      }
+    }
+  } catch (e) { /* 清理失败忽略，不影响主流程 */ }
+}
+
+// 把获取到的图片数据写入两级缓存（若仍处于该来源/该 key 有效）。
+// 单图超过大小上限时只进内存缓存（本次会话可见），不写持久化，避免大图占满配额。
+async function favStore(key, dataURL) {
   favMemCache.set(key, dataURL);
-  if (favStorage) {
-    favStorage.set({ [key]: dataURL }).catch(() => {});
+  if (!favStorage) return;
+  if (typeof dataURL === 'string' && dataURL.length > FAV_CACHE_MAX_ITEM_BYTES) return;
+  favTouchOrder(key);
+  try {
+    await favStorage.set({ [key]: dataURL });
+    await favEvict(key);
+  } catch (e) {
+    // 写入失败（可能配额临时紧张）：清除最旧项后重试一次
+    try {
+      const all = await favStorage.get(null);
+      const keys = Object.keys(all).filter((k) => k.startsWith(FAV_CACHE_PREFIX) && k !== key);
+      keys.sort((a, b) => favOrder.indexOf(a) - favOrder.indexOf(b));
+      const drop = keys.slice(0, Math.max(1, Math.ceil(keys.length / 5)));
+      await favStorage.remove(drop);
+      await favStorage.set({ [key]: dataURL });
+    } catch (e2) { /* 重试仍失败则忽略，仅保持内存缓存 */ }
   }
 }
 
