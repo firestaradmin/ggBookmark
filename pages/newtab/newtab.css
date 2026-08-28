@@ -221,6 +221,11 @@ body {
   border-radius: 22px;
   overflow: visible;
 }
+/* 规避 Chrome backdrop-filter 渲染 bug：搜索框去掉磨砂，保留背景色 */
+.searchwrap {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 .searchwrap .se-icon {
   width: 20px; height: 20px;
   background-size: contain; background-repeat: no-repeat; background-position: center;
@@ -587,6 +592,13 @@ html[data-theme="light"] .view-menu { background: rgba(250, 251, 255, 0.9); }
 .card-fit svg { width: 16px; height: 16px; }
 .card-fit:hover { color: var(--text); background: var(--glass-strong); }
 .card-fit.active { color: #fff; background: rgba(79, 124, 255, 0.22); box-shadow: inset 0 0 0 1px rgba(79,124,255,.5); }
+/* 规避 Chrome backdrop-filter 渲染 bug：卡片头三个按钮去掉磨砂，保留背景色 */
+.card-compact,
+.card-fit,
+.card-more {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 .card-menu {
   top: 44px;
   left: 100%;
