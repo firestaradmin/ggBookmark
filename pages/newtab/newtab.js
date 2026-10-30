@@ -15,6 +15,7 @@
   };
 
   let cardOrder = [];     // persisted order of {appId} among current category
+  let categoryOrders = {}; // 各分类的卡片顺序，跨分类拖动时同时更新来源和目标
   let suppressCardRender = false; // 拖拽高度等局部操作时，避免 onChanged 触发全量重渲染
   let lastCols = null;    // 上一次渲染时的列数，用于列数变化时的比例映射
 
@@ -36,8 +37,8 @@
     }
     state.activeCategory = data.activeCat || (state.categories[0] && state.categories[0].id) || null;
     state.pinned = Array.isArray(data.pinned) ? data.pinned : [];
-    const byCat = data.orderByCat || {};
-    cardOrder = byCat[state.activeCategory] || [];
+    categoryOrders = data.orderByCat || {};
+    cardOrder = (categoryOrders[state.activeCategory] || []).slice();
   }
 
   async function persist() {
@@ -45,16 +46,17 @@
     // 仅外部来源（设置页导入/清除）的 onChanged 会执行 reloadAndRender。
     suppressCardRender = true;
     try {
-      const data = await GG.api.storage.get('orderByCat');
-      const byCat = data.orderByCat || {};
-      byCat[state.activeCategory] = cardOrder;
-      await GG.api.storage.set({
+      categoryOrders[state.activeCategory] = cardOrder.slice();
+      const snapshot = structuredClone({
         apps: state.apps,
         categories: state.categories,
         activeCat: state.activeCategory,
-        orderByCat: byCat,
+        orderByCat: categoryOrders,
         pinned: state.pinned
       });
+      const data = await GG.api.storage.get('orderByCat');
+      snapshot.orderByCat = Object.assign({}, data.orderByCat, snapshot.orderByCat);
+      await GG.api.storage.set(snapshot);
     } finally {
       suppressCardRender = false;
     }
@@ -440,6 +442,7 @@
       b.innerHTML = `<span class="cat-name"></span>`;
       b.querySelector('.cat-name').textContent = cat.name;
       b.addEventListener('click', () => setActiveCategory(cat.id));
+      setupCategoryCardDrop(b, cat.id);
       b.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         openCatMenu(e, cat);
@@ -496,12 +499,10 @@
   }
 
   function setActiveCategory(id) {
+    categoryOrders[state.activeCategory] = cardOrder.slice();
     state.activeCategory = id;
-    GG.api.storage.get('orderByCat').then((d) => {
-      cardOrder = (d.orderByCat || {})[id] || [];
-      persist().then(() => {});
-      renderAll();
-    });
+    cardOrder = (categoryOrders[id] || []).slice();
+    renderAll();
   }
 
   function addCategory() {
@@ -817,7 +818,14 @@
 
   function renderCards() {
     const cards = reorderCards();
-    grid.innerHTML = '';
+    grid.classList.toggle('card-drag-active', !!cardDrag);
+    // 原拖拽节点必须一直留在 DOM 中，切换分类时将其整列暂存到屏幕外。
+    Array.from(grid.children).forEach((child) => {
+      if (cardDrag && child.contains(cardDrag.source)) {
+        child.classList.add('card-drag-origin');
+        child.setAttribute('aria-hidden', 'true');
+      } else child.remove();
+    });
     const tpl = $('#cardTpl');
     const cols = computedColumnCount();
     // 列数变化时，按比例重映射卡片列位置，避免卡片被重新分配到同一列导致布局大变
@@ -839,6 +847,7 @@
     buckets.forEach((list, colIdx) => {
       list.forEach((app) => {
         const card = buildCardEl(app, tpl);
+        if (cardDrag?.appId === app.id) card.classList.add('dragging');
         colEls[colIdx].appendChild(card);
       });
       // flexible filler so the column always has droppable empty space
@@ -848,7 +857,7 @@
       colEls[colIdx].appendChild(fill);
     });
     if (cards.length) grid.dataset.empty = 'false'; else grid.dataset.empty = 'true';
-    // 空状态时重建居中浮动的引导提示（grid.innerHTML='' 会清掉静态的 .grid-empty）
+    // 保留空分类的列容器，另外显示新建引导；拖拽时隐藏引导以露出所有落点。
     if (!cards.length) {
       const empty = document.createElement('div');
       empty.className = 'grid-empty';
@@ -861,13 +870,15 @@
       p.textContent = '还没有卡片';
       const sub = document.createElement('p');
       sub.className = 'sub';
-      sub.innerHTML = '在空白处<strong>右键</strong>，或点击右上角<strong>“卡片添加”</strong>，选择一个书签文件夹来生成卡片。';
+      sub.innerHTML = cardDrag
+        ? '拖到任意列并松开，将卡片移入这个分类。'
+        : '在空白处<strong>右键</strong>，或点击右上角<strong>“卡片添加”</strong>，选择一个书签文件夹来生成卡片。';
       empty.append(btn, p, sub);
       grid.appendChild(empty);
     }
     updateHScroll();
     // persist normalized col assignments asynchronously (avoid feedback loop)
-    if (dirty) persist();
+    if (dirty && !cardDrag) persist();
   }
 
   function buildCardEl(app, tpl) {
@@ -1249,16 +1260,87 @@
   //   - into an empty column (drop zone rendered at column bottoms)
   // The dragged card's `col` is set to the target column so it stays there.
   const CARD_MIME = 'application/x-gg-card';
+  const CATEGORY_DRAG_DELAY = 450;
+  let cardDrag = null;
+  let categoryDragTimer = null;
+  let categoryDragTarget = null;
+
+  function clearCategoryDragHover() {
+    clearTimeout(categoryDragTimer);
+    categoryDragTimer = null;
+    categoryDragTarget = null;
+    catsBar.querySelectorAll('.drag-hover').forEach((button) => button.classList.remove('drag-hover'));
+  }
+
+  function previewDragCategory(id) {
+    if (!cardDrag || id === state.activeCategory) return;
+    categoryOrders[state.activeCategory] = cardOrder.slice();
+    state.activeCategory = id;
+    cardOrder = (categoryOrders[id] || []).slice();
+    // 不重建分类按钮，以免鼠标仍悬停时反复触发 dragleave/dragenter。
+    catsBar.querySelectorAll('.cat[data-id]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.id === id);
+    });
+    renderCards();
+  }
+
+  function setupCategoryCardDrop(button, id) {
+    const hoverCategory = (event) => {
+      if (!cardDrag || !event.dataTransfer.types.includes(CARD_MIME)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      if (categoryDragTarget === id) return;
+      clearCategoryDragHover();
+      categoryDragTarget = id;
+      button.classList.add('drag-hover');
+      if (id !== state.activeCategory) {
+        categoryDragTimer = setTimeout(() => previewDragCategory(id), CATEGORY_DRAG_DELAY);
+      }
+    };
+    button.addEventListener('dragenter', hoverCategory);
+    button.addEventListener('dragover', hoverCategory);
+    button.addEventListener('dragleave', (event) => {
+      if (categoryDragTarget === id && !button.contains(event.relatedTarget)) clearCategoryDragHover();
+    });
+    button.addEventListener('drop', (event) => {
+      if (!cardDrag || !event.dataTransfer.types.includes(CARD_MIME)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const appId = cardDrag.appId;
+      const app = state.apps.find((item) => item.id === appId);
+      clearCategoryDragHover();
+      previewDragCategory(id);
+      moveCardTo(appId, app?.col || 0, null, false);
+    });
+  }
+
+  function finishCardDrag() {
+    if (!cardDrag) return;
+    const { originCategory, committed } = cardDrag;
+    clearCategoryDragHover();
+    cardDrag = null;
+    grid.querySelectorAll('.card-drag-origin').forEach((column) => column.remove());
+    if (!committed) {
+      state.activeCategory = originCategory;
+      cardOrder = (categoryOrders[originCategory] || []).slice();
+    }
+    renderCats();
+    renderCards();
+  }
 
   function setupCardDrag(card, app) {
     const handle = card.querySelector('.card-drag');
     handle.addEventListener('dragstart', (e) => {
+      clearCategoryDragHover();
+      categoryOrders[state.activeCategory] = cardOrder.slice();
+      cardDrag = { appId: app.id, source: card, originCategory: state.activeCategory, committed: false };
       e.dataTransfer.setData(CARD_MIME, app.id);
       e.dataTransfer.setData('text/plain', app.id); // fallback for some Firefox configurations
       e.dataTransfer.effectAllowed = 'move';
       card.classList.add('dragging');
     });
     handle.addEventListener('dragend', () => {
+      finishCardDrag();
       card.classList.remove('dragging');
       document.querySelectorAll('.card.drop-target').forEach((c) => c.classList.remove('drop-target'));
       document.querySelectorAll('.grid-col.col-drop').forEach((c) => c.classList.remove('col-drop'));
@@ -1299,16 +1381,22 @@
   function moveCardTo(draggedId, col, anchorId, before) {
     const draggedApp = state.apps.find((a) => a.id === draggedId);
     if (!draggedApp) return;
-    const prevOrder = cardOrder.slice();
-    const prevCol = draggedApp.col;
-    // 1) update card's column
-    draggedApp.col = col;
+    clearCategoryDragHover();
+    // 在修改前记录两个分类的顺序，让跨分类移动也能正确撤销。
+    pushUndo({ type: 'reorder', appId: draggedId });
+    if (draggedApp.categoryId !== state.activeCategory) {
+      const sourceId = draggedApp.categoryId;
+      categoryOrders[sourceId] = (categoryOrders[sourceId] || []).filter((item) => item.appId !== draggedId);
+      draggedApp.categoryId = state.activeCategory;
+    }
+    if (cardDrag) cardDrag.committed = true;
     // 2) rebuild cardOrder so that, within `col`, the dragged card sits in the
     //    right place. Strategy: build per-column ordered lists from current
     //    cardOrder + apps, then re-insert dragged at desired spot, then
     //    flatten back to a new cardOrder.
     const cols = computedColumnCount();
     const safeCol = Math.max(0, Math.min(col, cols - 1));
+    draggedApp.col = safeCol;
     // gather all active apps grouped by their col (in current cardOrder order)
     const active = activeCards();
     const orderMap = new Map(cardOrder.map((o, i) => [o.appId, i]));
@@ -1341,7 +1429,7 @@
     const newOrder = [];
     buckets.forEach((list) => list.forEach((a) => newOrder.push({ appId: a.id })));
     cardOrder = newOrder;
-    pushUndo({ type: 'reorder', from: prevOrder, to: cardOrder.slice() });
+    categoryOrders[state.activeCategory] = cardOrder.slice();
     persist().then(renderCards);
   }
 
@@ -1631,7 +1719,9 @@
       title: '新卡片',
       categoryId: state.activeCategory,
       folderId: null,
-      recursive: false
+      recursive: false,
+      compact: true,
+      fitMode: 'auto'
     };
     if (typeof col === 'number') newApp.col = col;
     else {
@@ -1718,7 +1808,9 @@
           title,
           categoryId: state.activeCategory,
           folderId: selectedFolderId,
-          recursive: $('#pickerRecursive').checked
+          recursive: $('#pickerRecursive').checked,
+          compact: true,
+          fitMode: 'auto'
         };
         // place the new card in the column that was right-clicked (if any)
         if (pickedCol != null) newApp.col = pickedCol;
@@ -1733,7 +1825,7 @@
 
   // ---------- Undo ----------
   function pushUndo(entry, prune = true) {
-    state.history.push({ snapshot: JSON.stringify({ apps: state.apps, categories: state.categories, cardOrder }), entry });
+    state.history.push({ snapshot: JSON.stringify({ apps: state.apps, categories: state.categories, cardOrder, categoryOrders, activeCategory: state.activeCategory }), entry });
     if (state.history.length > 30) state.history.shift();
     render(state.history.length);
   }
@@ -1744,6 +1836,8 @@
     const snap = JSON.parse(last.snapshot);
     state.apps = snap.apps;
     state.categories = snap.categories;
+    categoryOrders = snap.categoryOrders || categoryOrders;
+    state.activeCategory = snap.activeCategory || state.activeCategory;
     cardOrder = snap.cardOrder;
     persist().then(renderAll);
     GG.toast.show('已撤回', 'success');
@@ -1768,6 +1862,8 @@
     let items = [];          // 当前可键盘导航的 .allbm-item 元素
     let activeIdx = -1;
     let searching = false;
+    let contextMenu = null;
+    let loadVersion = 0;
 
     const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
 
@@ -1782,8 +1878,60 @@
 
     function close() {
       if (!overlay) return;
+      closeContextMenu();
+      loadVersion++;
       overlay.remove();
       overlay = null; items = []; activeIdx = -1; searching = false;
+      btn.focus();
+    }
+
+    function closeContextMenu() {
+      if (contextMenu) { contextMenu.remove(); contextMenu = null; }
+    }
+
+    function openContextMenu(e, bookmark) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeContextMenu();
+      const menu = document.createElement('div');
+      menu.className = 'menu glass allbm-ctx';
+      menu.setAttribute('role', 'menu');
+      menu.setAttribute('aria-label', '书签操作');
+      const add = (label, icon, action, danger = false) => {
+        const button = document.createElement('button');
+        button.className = 'menu-item' + (danger ? ' danger' : '');
+        button.setAttribute('role', 'menuitem');
+        button.innerHTML = GG.icon(icon) + '<span></span>';
+        button.querySelector('span').textContent = label;
+        button.addEventListener('click', () => {
+          closeContextMenu();
+          overlay?.querySelector('.allbm-search input').focus();
+          action();
+        });
+        menu.appendChild(button);
+      };
+      add('编辑书签', 'settings', () => editBookmark(bookmark));
+      add('删除书签', 'trash', async () => {
+        if (!confirm(`确定删除书签“${bookmark.title || bookmark.url}”？`)) return;
+        try {
+          await GG.api.bookmarks.remove(bookmark.id);
+          GG.toast.show('已删除', 'success');
+        } catch (error) {
+          GG.toast.show('删除失败：' + error.message, 'error');
+        }
+      }, true);
+      overlay.appendChild(menu);
+      contextMenu = menu;
+      menu.style.left = Math.max(8, Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+      menu.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8)) + 'px';
+      menu.querySelector('button').focus();
+      menu.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        event.preventDefault();
+        const buttons = Array.from(menu.querySelectorAll('button'));
+        const index = buttons.indexOf(document.activeElement);
+        buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus();
+      });
     }
 
     function buildPop() {
@@ -1831,6 +1979,7 @@
           if (it) openItem(it, e.ctrlKey || e.metaKey);
         }
         else if (e.key === 'Escape') {
+          e.stopPropagation();
           if (input.value) { input.value = ''; overlay.querySelector('.allbm-search').classList.remove('has-q'); render(''); }
           else close();
         }
@@ -1843,7 +1992,18 @@
       });
       overlay.querySelector('.allbm-close').addEventListener('click', close);
       overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
-      overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+      overlay.addEventListener('mousedown', (e) => {
+        if (contextMenu && !contextMenu.contains(e.target)) closeContextMenu();
+      });
+      overlay.addEventListener('scroll', closeContextMenu, true);
+      overlay.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        if (contextMenu) {
+          closeContextMenu();
+          input.focus();
+        } else close();
+      });
       recChk.addEventListener('change', () => {
         recursive = recChk.checked;
         renderContent();
@@ -1852,10 +2012,15 @@
     }
 
     async function loadData() {
-      const body = overlay.querySelector('.allbm-body');
+      if (!overlay) return;
+      const currentOverlay = overlay;
+      const version = ++loadVersion;
+      const body = currentOverlay.querySelector('.allbm-body');
+      closeContextMenu();
       body.innerHTML = '<div class="allbm-empty">加载中…</div>';
       try {
         const tree = await GG.api.bookmarks.getTree();
+        if (overlay !== currentOverlay || version !== loadVersion) return;
         flat = [];
         folders = [];
         folderById = new Map();
@@ -1875,10 +2040,11 @@
         }
         // 虚拟「全部书签」根节点
         folderById.set('all', { id: 'all', title: '全部书签', path: '全部书签', depth: -1, bookmarks: flat, children: folders, total: flat.length });
-        selectedId = 'all';
+        if (!folderById.has(selectedId)) selectedId = 'all';
         renderNav();
         render(overlay.querySelector('.allbm-search input').value.trim());
       } catch (e) {
+        if (overlay !== currentOverlay || version !== loadVersion) return;
         body.innerHTML = '<div class="allbm-empty">书签加载失败</div>';
       }
     }
@@ -1958,6 +2124,7 @@
     /* ---- 右侧内容区 ---- */
     function render(query) {
       if (!overlay || !flat) return;
+      closeContextMenu();
       searching = !!query;
       const recLabel = overlay.querySelector('.c-recursive');
       recLabel.style.display = searching ? 'none' : '';
@@ -2064,6 +2231,10 @@
       }
       el.append(ico, main);
       el.addEventListener('click', (e) => openItem(el, e.ctrlKey || e.metaKey));
+      el.addEventListener('contextmenu', (e) => {
+        setActive(items.indexOf(el));
+        openContextMenu(e, b);
+      });
       el.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openItem(el, true); } });
       el.addEventListener('mousemove', () => { const i = items.indexOf(el); if (i >= 0 && i !== activeIdx) setActive(i); });
       return el;
@@ -2099,6 +2270,12 @@
     }
 
     btn.addEventListener('click', (e) => { e.stopPropagation(); open(); });
+    // 同步编辑、删除及整理器中的更改，保留当前文件夹与搜索词。
+    const refreshIfOpen = () => { if (overlay) loadData(); };
+    GG.api.bookmarks.onChanged.addListener(refreshIfOpen);
+    GG.api.bookmarks.onRemoved.addListener(refreshIfOpen);
+    GG.api.bookmarks.onCreated.addListener(refreshIfOpen);
+    GG.api.bookmarks.onMoved.addListener(refreshIfOpen);
 
     // 全局快捷键：按「反引号」物理键（数字 1 左侧）切换浮窗。
     // - 英文输入法：keydown 直接触发，可开/关并屏蔽字符。
@@ -2120,6 +2297,34 @@
       e.preventDefault();
       open();
     });
+  }
+
+  // 在当前起始页内复用整理器，保留其拖拽、多选和撤销功能。
+  function openOrganizer() {
+    if (document.querySelector('.organizer-dialog')) return;
+    closeTileMenu();
+    const dialog = document.createElement('dialog');
+    dialog.className = 'organizer-dialog';
+    dialog.setAttribute('aria-label', '整理书签');
+    const frame = document.createElement('iframe');
+    frame.title = '整理书签';
+    frame.src = GG.api.runtime.getURL('pages/organizer/organizer.html') + '?embedded=1';
+    dialog.appendChild(frame);
+    const onMessage = (event) => {
+      if (event.source !== frame.contentWindow || event.origin !== location.origin) return;
+      if (event.data?.type === 'gg-organizer-close') dialog.close();
+    };
+    window.addEventListener('message', onMessage);
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', () => {
+      window.removeEventListener('message', onMessage);
+      dialog.remove();
+      $('#btnOrganize').focus();
+    }, { once: true });
+    document.body.appendChild(dialog);
+    dialog.showModal();
   }
 
   // ---------- Buttons ----------
@@ -2154,7 +2359,7 @@
     }
     const btnOrg = $('#btnOrganize');
     btnOrg.innerHTML = GG.icon('bookmark');
-    btnOrg.addEventListener('click', () => GG.api.tabs.create({ url: GG.api.runtime.getURL('pages/organizer/organizer.html') }));
+    btnOrg.addEventListener('click', openOrganizer);
     const btnAdd = $('#btnAddCard');
     btnAdd.innerHTML = GG.icon('addCard');
     btnAdd.dataset.tip = '卡片添加：新增一个书签卡片';
@@ -2272,7 +2477,7 @@
     // 当前是否存在需要屏蔽自动聚焦的弹层 / 菜单 / 面板
     const popupOpen = () => (
       document.querySelector('#seMenu.open, #viewMenu.open, .cat-ctx, .tile-ctx, .pin-ctx, .grid-ctx, .allbm-overlay') ||
-      document.querySelector('#ntSettings.open') ||
+      document.querySelector('#ntSettings.open, .organizer-dialog[open]') ||
       !document.querySelector('#folderPickerWrap')?.classList.contains('hidden') ||
       !document.querySelector('#cpOverlay')?.classList.contains('hidden')
     );
@@ -2398,6 +2603,12 @@
     });
     // folder renamed elsewhere -> sync card title; 书签重命名 -> 同步卡片内书签项标题
     GG.api.bookmarks.onChanged.addListener((id, changeInfo) => {
+      if (changeInfo.url !== undefined) {
+        GG.api.bookmarks.get(id).then((nodes) => {
+          if (nodes[0]) return refreshCardsForFolder(nodes[0].parentId);
+        }).catch(() => {});
+        return;
+      }
       if (changeInfo.title === undefined) return;
       // 1) 若是文件夹（某卡片绑定的 folderId）被重命名，同步卡片标题
       const app = state.apps.find((a) => a.folderId === id);

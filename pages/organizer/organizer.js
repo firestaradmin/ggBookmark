@@ -8,6 +8,8 @@
   'use strict';
 
   const $ = (s) => document.querySelector(s);
+  const embedded = window.parent !== window && new URLSearchParams(location.search).get('embedded') === '1';
+  const closeEmbedded = () => window.parent.postMessage({ type: 'gg-organizer-close' }, location.origin);
 
   const DEFAULT_ROOT = 'root________';
   let orgSettings = {};
@@ -980,19 +982,40 @@
   function wireButtons() {
     $('#btnDelete').innerHTML = GG.icon('trash');
     $('#btnUndo').innerHTML = GG.icon('undo');
-    $('#btnHome').innerHTML = GG.icon('return');
+    $('#btnHome').innerHTML = GG.icon(embedded ? 'close_x' : 'return');
+    if (embedded) {
+      $('#btnHome').dataset.tip = '关闭整理面板（Esc）';
+      $('#btnHome').setAttribute('aria-label', '关闭整理面板');
+      document.querySelector('.toolbar').appendChild($('#btnHome'));
+    }
     $('#btnDupCheck').innerHTML = GG.icon('copy');
     $('#btnDupCheck').addEventListener('click', switchView);
     $('#btnDupRefresh').innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z"></path></svg>';
     $('#btnDupRefresh').addEventListener('click', () => { renderDupGroups(); renderDupList(); GG.toast.show('已重新扫描', 'success'); });
     $('#btnUndo').addEventListener('click', undo);
     $('#btnDelete').addEventListener('click', deleteSelected);
-    $('#btnHome').addEventListener('click', () => GG.api.tabs.update({ url: GG.api.runtime.getURL('pages/newtab/newtab.html') }));
+    $('#btnHome').addEventListener('click', () => {
+      if (embedded) closeEmbedded();
+      else GG.api.tabs.update({ url: GG.api.runtime.getURL('pages/newtab/newtab.html') });
+    });
     $('#btnNewFolder').innerHTML = GG.icon('folder');
     $('#btnNewFolder').addEventListener('click', () => newFolder(activePanel() ? activePanel().folderId : DEFAULT_ROOT));
     $('#btnCollapseAll').innerHTML = GG.icon('foldUp');
     $('#btnCollapseAll').addEventListener('click', collapseAll);
     document.addEventListener('keydown', (e) => {
+      if (embedded && e.key === 'Escape') {
+        // 先关闭编辑窗口或菜单，再允许 Esc 退出整个整理面板。
+        if (e.target.closest('.gg-editor-overlay')) { e.preventDefault(); return; }
+        const menus = document.querySelectorAll('.menu.open');
+        if (menus.length) {
+          e.preventDefault();
+          menus.forEach((menu) => menu.classList.remove('open'));
+          return;
+        }
+        e.preventDefault();
+        closeEmbedded();
+        return;
+      }
       if (e.key === 'Delete' && activePanel() && activePanel().selection.size) { e.preventDefault(); deleteSelected(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
     });
