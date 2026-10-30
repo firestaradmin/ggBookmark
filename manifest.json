@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GG Bookmark - 书签起始页",
-  "version": "1.8.0",
+  "version": "1.8.2",
   "description": "现代风格的 Chrome 书签起始页：分类网格卡片、可自定义背景、书签整理器、支持导入导出配置和 WebDAV 双向智能同步。",
   "permissions": [
     "bookmarks",
@@ -30,12 +30,21 @@
     "newtab": "pages/newtab/newtab.html"
   },
   "action": {
-    "default_title": "GG Bookmark",
+    "default_title": "收藏当前网页 · GG Bookmark",
+    "default_popup": "pages/popup/popup.html",
     "default_icon": {
       "16": "icons/GGBookmark16.png",
       "32": "icons/GGBookmark32.png",
       "48": "icons/GGBookmark48.png",
       "128": "icons/GGBookmark128.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      }
     }
   }
 }

@@ -641,6 +641,7 @@
 
     const root = targetParentId || await resolveToolbarId();
     const newPathToId = new Map();
+    const bookmarkIdMap = new Map();
 
     // 缓存父子关系，避免重复查询
     const childrenCache = new Map();
@@ -671,11 +672,13 @@
           newPathToId.set(p.join(PATH_SEP), f.id);
           if (n.children) await recreate(n.children, f.id, p);
         } else if (n.type === 'bookmark' && n.url) {
-          if (!(await findExisting(parentId, n))) {
-            await GG.api.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
+          let bookmark = await findExisting(parentId, n);
+          if (!bookmark) {
+            bookmark = await GG.api.bookmarks.create({ title: n.title || n.url, url: n.url, parentId });
             // 创建后失效父级缓存，避免同文件夹内重复创建
             childrenCache.delete(parentId);
           }
+          if (n.id) bookmarkIdMap.set(n.id, bookmark.id);
         }
       }
     }
@@ -686,7 +689,7 @@
       // 直接将顶层文件夹的内部内容导入到目标文件夹下，避免多包一层同名文件夹
       await recreate(node.children || [], root, []);
     }
-    return { newPathToId, idToPath };
+    return { newPathToId, idToPath, bookmarkIdMap };
   }
 
   // 展示书签文件夹选择对话框，返回用户选定的文件夹 id（取消则返回 null）
@@ -1287,6 +1290,9 @@
           delete cfg.settings.backgroundImage;
         }
         cfg.apps = stored.apps || [];
+        if (cfg.apps.some(GG.CardBookmarks.isSelection)) {
+          cfg.apps = GG.CardBookmarks.snapshotApps(cfg.apps, await GG.api.bookmarks.getTree());
+        }
         cfg.categories = stored.categories || [];
         cfg.orderByCat = stored.orderByCat || {};
         cfg.activeCat = stored.activeCat || null;
@@ -1350,6 +1356,7 @@
         if (!importedSettings.backgroundImage) importedSettings.backgroundImage = currentBg;
 
         let apps = imported.apps || [];
+        let bookmarkIdMap = null;
         let skipBookmarks = false;
 
         // 导入书签：若会覆盖/新增已有书签，先提示用户备份
@@ -1384,7 +1391,9 @@
                 skipBookmarks = true;
                 GG.toast.show('已取消书签导入，仅导入设置与卡片', 'info');
               } else {
-                const { newPathToId, idToPath } = await recreateBookmarks(imported.bookmarks, target);
+                const rebuilt = await recreateBookmarks(imported.bookmarks, target);
+                const { newPathToId, idToPath } = rebuilt;
+                bookmarkIdMap = rebuilt.bookmarkIdMap;
                 apps = remapFolderIds(apps, idToPath, newPathToId);
               }
             } catch (e) {
@@ -1393,6 +1402,9 @@
           }
         }
 
+        if (apps.some(GG.CardBookmarks.isSelection)) {
+          apps = GG.CardBookmarks.remapApps(apps, await GG.api.bookmarks.getTree(), bookmarkIdMap);
+        }
         const toSave = {
           settings: importedSettings,
           apps: apps,
@@ -1713,7 +1725,7 @@
     // 清除配置：恢复默认并删除本地存储（仅本扩展配置，不删除 Firefox 书签）
     $('#btnClear').addEventListener('click', async () => {
       if (!window.confirm('确定清除所有配置？将恢复默认设置且无法撤销（含卡片与壁纸）。\n注意：此操作仅清除本扩展配置，不会删除 Firefox 中的书签。')) return;
-      await GG.api.storage.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat', 'pinned']);
+      await GG.api.storage.remove(['settings', 'apps', 'categories', 'orderByCat', 'activeCat', 'pinned', 'quickBookmarkRecentFolders']);
       settings = Object.assign({}, GG.DEFAULTS);
       load();
       GG.api.runtime.sendMessage({ type: 'gg-config-imported' }).catch(() => {});
@@ -1757,11 +1769,34 @@
         // 切到「关于」时填充版本号
         if (show && p.dataset.panel === 'about') fillAbout();
         if (show && p.dataset.panel === 'update') fillUpdateVersion();
+        if (show && p.dataset.panel === 'other') refreshBookmarkShortcut();
       });
     }
     tabs.forEach((t) => {
       t.addEventListener('click', () => show(t.dataset.panel));
     });
+  }
+
+  async function refreshBookmarkShortcut() {
+    const value = document.getElementById('quickBookmarkShortcut');
+    if (!value) return;
+    try {
+      const commands = await GG.api.commands.getAll();
+      const action = commands.find((command) => command.name === '_execute_action');
+      value.textContent = action?.shortcut || '未设置，或快捷键存在冲突';
+    } catch (error) { value.textContent = '请重新加载扩展后查看'; }
+  }
+
+  function wireBookmarkShortcut() {
+    const button = document.getElementById('btnBookmarkShortcut');
+    if (!button) return;
+    button.addEventListener('click', async () => {
+      try { await GG.api.tabs.create({ url: 'chrome://extensions/shortcuts' }); }
+      catch (error) { GG.toast.show('无法打开，请在地址栏输入 chrome://extensions/shortcuts', 'error'); }
+    });
+    window.addEventListener('focus', refreshBookmarkShortcut);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBookmarkShortcut(); });
+    refreshBookmarkShortcut();
   }
 
   // 关于面板：填充版本号
@@ -1780,6 +1815,35 @@
     }
   }
 
+  function renderFooterUpdate(info) {
+    const badge = document.getElementById('footerUpdate');
+    if (!badge) return;
+    badge.hidden = !info || !info.isNewer;
+    if (badge.hidden) return;
+    badge.href = info.url;
+    document.getElementById('footerUpdateText').textContent = '新版本 v' + info.version;
+    badge.dataset.tip = '发现新版本 v' + info.version + '，点击前往更新页面';
+    badge.setAttribute('aria-label', badge.dataset.tip);
+  }
+
+  async function wireFooterUpdate() {
+    const badge = document.getElementById('footerUpdate');
+    if (!badge) return;
+    badge.addEventListener('click', (event) => {
+      event.preventDefault();
+      GG.api.tabs.create({ url: badge.href });
+    });
+    GG.api.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && GG.Updates.cacheKey in changes) {
+        GG.Updates.readCached().then(renderFooterUpdate).catch(() => {});
+      }
+    });
+    try {
+      renderFooterUpdate(await GG.Updates.readCached());
+      renderFooterUpdate(await GG.Updates.check());
+    } catch (error) { /* 自动检查失败时保持已有提示，不打断起始页。 */ }
+  }
+
   // 检查 GitHub 最新发布版本
   async function checkUpdate() {
     const latestEl = document.getElementById('updateLatestVersion');
@@ -1791,18 +1855,15 @@
     latestEl.textContent = '检查中…';
     if (hint) hint.textContent = '正在连接 GitHub…';
     try {
-      const cur = (chrome.runtime && chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
-      const res = await fetch('https://api.github.com/repos/firestaradmin/ggBookmark/releases/latest');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      const latest = (data && data.tag_name) || '';
-      const latestVer = latest.replace(/^v/, '');
-      latestEl.textContent = latest ? 'v' + latestVer : '—';
-      const isNewer = latestVer && cur && compareVersions(latestVer, cur) > 0;
+      const info = await GG.Updates.check({ force: true });
+      const latestVer = info.version;
+      const isNewer = info.isNewer;
+      latestEl.textContent = 'v' + latestVer;
+      renderFooterUpdate(info);
       if (hint) {
         if (isNewer) {
           // 有新版：提示文字包含可点击的更新链接（指向 GitHub releases 页面）
-          const url = data.html_url || 'https://github.com/firestaradmin/ggBookmark/releases';
+          const url = info.url;
           hint.style.color = 'var(--text-faint)';
           hint.innerHTML = '发现新版本 v' + latestVer + '，点击 <a class="update-link" href="' + url + '" target="_blank" rel="noopener">前往更新页面</a> 下载。';
           hint.querySelectorAll('.update-link').forEach((a) => {
@@ -1815,9 +1876,7 @@
       }
       if (releaseBtn) {
         releaseBtn.style.display = isNewer ? '' : 'none';
-        if (data.html_url) {
-          releaseBtn.onclick = () => { GG.api.tabs.create({ url: data.html_url }); };
-        }
+        releaseBtn.onclick = () => { GG.api.tabs.create({ url: info.url }); };
       }
     } catch (e) {
       latestEl.textContent = '检查失败';
@@ -1827,19 +1886,12 @@
       if (btn) btn.disabled = false;
     }
   }
-  function compareVersions(a, b) {
-    const pa = a.split('.').map(Number);
-    const pb = b.split('.').map(Number);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-      const x = pa[i] || 0, y = pb[i] || 0;
-      if (x !== y) return x - y;
-    }
-    return 0;
-  }
 
   // 在 DOMContentLoaded 之后再接入标签与更新检查（保持原有 init 行为）
   document.addEventListener('DOMContentLoaded', () => {
     wireTabs();
+    wireBookmarkShortcut();
+    wireFooterUpdate();
     const btnCheck = document.getElementById('btnCheckUpdate');
     if (btnCheck) btnCheck.addEventListener('click', checkUpdate);
     const btnHelp = document.getElementById('btnOpenHelp');

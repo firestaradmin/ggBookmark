@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>快捷收藏 · GG Bookmark</title>
+  <link rel="stylesheet" href="../../css/base.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><img src="../../icons/GGBookmark32.png" alt=""><div><h1 id="panelTitle">收藏当前网页</h1><p>浏览文件夹或直接搜索，回车保存</p></div></div>
+    <button type="button" class="btn" id="openHome" title="打开起始页">起始页 ↗</button>
+  </header>
+  <form id="bookmarkForm">
+    <div class="page-fields">
+      <div><label for="bookmarkTitle">名称</label><input id="bookmarkTitle" type="text" placeholder="网页名称" autocomplete="off"></div>
+      <div><label for="bookmarkUrl">网址</label><input id="bookmarkUrl" type="text" placeholder="https://example.com" required autocomplete="off" spellcheck="false"></div>
+    </div>
+    <p class="existing hidden" id="existingHint"></p>
+    <section class="destination" aria-label="保存文件夹">
+      <div class="section-head"><h2>选择文件夹</h2><div class="folder-actions"><button type="button" class="btn hidden" id="locateExisting">定位已收藏</button><button type="button" class="btn" id="toggleNewFolder" aria-expanded="false" disabled>＋ 新建文件夹</button></div></div>
+      <div class="selected-folder" id="selectedFolder">正在读取文件夹…</div>
+      <div class="new-folder hidden" id="newFolderPanel">
+        <label for="newFolderName">在所选文件夹内新建</label>
+        <div><input id="newFolderName" placeholder="新文件夹名称" autocomplete="off"><button type="button" class="btn" id="createFolder">创建并选中</button></div>
+      </div>
+      <input id="folderSearch" type="search" placeholder="搜索文件夹名称或完整路径…" autocomplete="off" aria-label="搜索保存文件夹" aria-controls="folderList" aria-expanded="true" aria-haspopup="tree" role="combobox" aria-autocomplete="list">
+      <div id="recentFolders" class="recent-folders hidden" aria-label="最近使用的文件夹"></div>
+      <div id="folderList" class="folder-list" role="tree" aria-label="文件夹树"></div>
+      <p class="list-hint" id="folderHint">←→ 展开 / 收起 · ↑↓ 选择 · Enter 保存</p>
+    </section>
+    <div class="card-choice hidden" id="cardChoice">
+      <label for="targetCard">同时加入自选卡片</label>
+      <select id="targetCard"><option value="">仅保存到浏览器书签</option></select>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+    <footer><span>保存为 Chrome 原生书签</span><button type="submit" class="btn primary" id="saveBookmark" disabled>保存书签 ↵</button></footer>
+  </form>
+  <script src="../../lib/browser.js"></script>
+  <script src="../../lib/store.js"></script>
+  <script src="../../lib/card-bookmarks.js"></script>
+  <script src="../../lib/quick-bookmark.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

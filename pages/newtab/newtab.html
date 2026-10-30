@@ -83,6 +83,10 @@
   <footer class="app-footer">
     <span class="footer-author">@firestaradmin</span>
     <a class="footer-version" id="footerVersion" href="https://github.com/firestaradmin/ggBookmark" target="_blank" rel="noopener" data-tip="GitHub 仓库"></a>
+    <a class="footer-update" id="footerUpdate" href="https://github.com/firestaradmin/ggBookmark/releases" target="_blank" rel="noopener" hidden>
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 4-4 4 4M12 8v9"/></svg>
+      <span id="footerUpdateText"></span>
+    </a>
     <div class="footer-warning" id="footerWarning" hidden>
       <span class="fw-icon" data-tip="同步警告">⚠</span>
       <span class="fw-msg" id="footerWarningMsg"></span>
@@ -364,6 +368,16 @@
 
       <div class="shell glass s-panel" data-panel="other" style="display:none">
         <section class="group">
+          <h2>快捷收藏</h2>
+          <div class="field">
+            <span class="f-title">当前快捷键</span>
+            <strong id="quickBookmarkShortcut" aria-live="polite">正在读取…</strong>
+            <button class="btn" type="button" id="btnBookmarkShortcut">修改快捷键</button>
+          </div>
+          <div class="hint">点击工具栏中的 GG Bookmark 图标或使用快捷键，打开当前网页的收藏面板。可搜索保存文件夹、使用最近文件夹，也可新建文件夹。</div>
+          <div class="hint">快捷键由 Chrome 管理。点击“修改快捷键”，在打开的页面找到 GG Bookmark 的“激活扩展程序”并设置；返回后会自动刷新显示，无需点击“保存设置”。默认快捷键为 Ctrl+Shift+Y（Mac：Command+Shift+Y）。</div>
+        </section>
+        <section class="group">
           <h2>搜索</h2>
           <div class="field">
             <span class="f-title">默认搜索引擎</span>
@@ -444,12 +458,22 @@
   <div id="folderPickerWrap" class="overlay hidden">
     <div class="picker glass">
       <div class="picker-head">
-        <h3 id="pickerTitle">选择书签文件夹</h3>
+        <h3 id="pickerTitle">选择书签</h3>
         <button class="btn icon-btn" id="pickerClose">✕</button>
       </div>
+      <div class="picker-options">
+        <div class="picker-modes" aria-label="书签显示方式">
+          <button type="button" data-picker-mode="folder">整个文件夹</button>
+          <button type="button" data-picker-mode="selection">自选书签</button>
+        </div>
+        <p class="picker-hint" id="pickerHint"></p>
+        <input id="pickerSearch" class="hidden" type="search" placeholder="搜索名称、网址或文件夹…" autocomplete="off" aria-label="搜索可选书签">
+      </div>
       <div class="picker-tree" id="pickerTree"></div>
+      <div class="picker-bookmarks hidden" id="pickerBookmarks"></div>
       <div class="picker-foot">
-        <label class="cb"><input type="checkbox" id="pickerRecursive"> 包含子文件夹</label>
+        <label class="cb" id="pickerRecursiveLabel"><input type="checkbox" id="pickerRecursive"> 包含子文件夹</label>
+        <span class="picker-count hidden" id="pickerSelectionCount" aria-live="polite"></span>
         <button class="btn primary" id="pickerConfirm">确认</button>
       </div>
     </div>
@@ -487,6 +511,8 @@
 
   <script src="../../lib/browser.js"></script>
   <script src="../../lib/store.js"></script>
+  <script src="../../lib/updates.js"></script>
+  <script src="../../lib/card-bookmarks.js"></script>
   <script src="../../lib/sync.js"></script>
   <script src="../../js/shared.js"></script>
   <script src="settings.js"></script>

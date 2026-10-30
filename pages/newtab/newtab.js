@@ -5,7 +5,7 @@
 
   const state = {
     settings: {},
-    apps: [],             // [{ id, title, folderId, recursive }]
+    apps: [],             // Folder cards or ordered native bookmark selections.
     categories: [],       // [{ id, name }]
     activeCategory: null,
     cards: [],            // category filter result -> workspace order [{appId, categoryId}]
@@ -546,24 +546,28 @@
   }
 
   // ---------- Tile (bookmark) ----------
+  const tileRenders = new WeakMap();
   async function buildTiles(card, folderId, recursive, app) {
-    let list;
-    try {
-      list = await GG.api.bookmarks.getChildren(folderId);
-    } catch (e) {
-      list = [];
-    }
-    const items = list || [];
-    let bookmarks = items.filter((b) => b.type === 'bookmark');
-    if (recursive) {
-      const folders = items.filter((b) => b.type === 'folder');
-      for (const f of folders) {
-        try {
-          const sub = await GG.api.bookmarks.getChildren(f.id);
-          bookmarks = bookmarks.concat((sub || []).filter((b) => b.type === 'bookmark'));
-        } catch (e) {}
+    const version = (tileRenders.get(card) || 0) + 1;
+    tileRenders.set(card, version);
+    let bookmarks = [];
+    if (GG.CardBookmarks.isSelection(app)) {
+      try { bookmarks = GG.CardBookmarks.list(app, await GG.api.bookmarks.getTree()); } catch (e) { /* Keep card usable if loading fails. */ }
+    } else {
+      let list;
+      try { list = await GG.api.bookmarks.getChildren(folderId); } catch (e) { list = []; }
+      const items = list || [];
+      bookmarks = items.filter((b) => b.type === 'bookmark');
+      if (recursive) {
+        for (const f of items.filter((b) => b.type === 'folder')) {
+          try {
+            const sub = await GG.api.bookmarks.getChildren(f.id);
+            bookmarks = bookmarks.concat((sub || []).filter((b) => b.type === 'bookmark'));
+          } catch (e) {}
+        }
       }
     }
+    if (tileRenders.get(card) !== version || !card.isConnected) return;
     const body = card.querySelector('.card-body');
     body.innerHTML = '';
     const tpl = $('#bookmarkTileTpl');
@@ -605,12 +609,26 @@
     if (!bookmarks.length) {
       const li = document.createElement('li');
       li.className = 'tile-empty';
-      li.textContent = '这个文件夹是空的';
+      li.textContent = GG.CardBookmarks.isSelection(app) ? '还没有可显示的书签' : '这个文件夹是空的';
+      if (GG.CardBookmarks.isSelection(app)) {
+        const choose = document.createElement('button');
+        choose.className = 'btn';
+        choose.textContent = '选择要显示的书签';
+        choose.addEventListener('click', () => openPicker(card, app));
+        li.appendChild(choose);
+      }
       body.appendChild(li);
+    }
+    if (GG.CardBookmarks.isSelection(app) && (app.bookmarkRefs || []).length > bookmarks.length) {
+      const note = document.createElement('li');
+      note.className = 'tile-empty';
+      note.textContent = '部分书签已删除或尚未匹配，可在卡片设置中重新选择。';
+      body.appendChild(note);
     }
     // tiles 渲染完成后重算紧凑模式：此时 tile 数量已正确，
     // 否则 buildCardEl 里同步调用 applyCompact 时 tiles 尚未加载，会误判。
     applyCompact(card, app);
+    applyExclusions(card, app);
   }
 
   // 判断 childId 是否位于 ancestorId 的子树内（用于 recursive 卡片）
@@ -638,6 +656,11 @@
     if (!folderId) return;
     // 找出绑定该文件夹（或递归包含）的卡片
     for (const app of state.apps) {
+      if (GG.CardBookmarks.isSelection(app)) {
+        const card = grid.querySelector(`.card[data-app-id="${CSS.escape(app.id)}"]`);
+        if (card) await buildTiles(card, null, false, app);
+        continue;
+      }
       if (!app.folderId) continue;
       const direct = app.folderId === folderId;
       const recursiveHit = app.recursive && await isFolderInTree(folderId, app.folderId);
@@ -648,6 +671,13 @@
       await buildTiles(card, app.folderId, app.recursive, app);
       applyExclusions(card, app);
     }
+  }
+
+  function refreshSelectionCards() {
+    state.apps.filter(GG.CardBookmarks.isSelection).forEach((app) => {
+      const card = grid.querySelector(`.card[data-app-id="${CSS.escape(app.id)}"]`);
+      if (card) buildTiles(card, null, false, app);
+    });
   }
 
   function hostOf(url) {
@@ -693,7 +723,7 @@
     add('编辑书签', 'settings', () => editBookmark(bm, tile));
     add('置顶到快速访问', 'target', () => { addPin(bm.url, bm.title); GG.toast.show('已添加到置顶', 'success'); });
     add('移出卡片', 'backspace', () => removeTile(tile, bm, card));
-    add('删除书签', 'trash', () => deleteBookmark(tile, bm, card), true);
+    add('删除浏览器书签', 'trash', () => deleteBookmark(tile, bm, card), true);
     document.body.appendChild(menu);
     tileMenuEl = menu;
     menu.style.left = Math.min(x, window.innerWidth - menu.offsetWidth - 8) + 'px';
@@ -707,8 +737,14 @@
 
   function removeTile(tile, bm, card) {
     tile.remove();
-    const app = state.apps.find((a) => a.id === card.dataset.appId && a.folderId === card.dataset.folderId);
+    const app = state.apps.find((a) => a.id === card.dataset.appId);
     if (app) {
+      if (GG.CardBookmarks.isSelection(app)) {
+        app.bookmarkRefs = (app.bookmarkRefs || []).filter((ref) => ref.id !== bm.id);
+        persist().then(renderCards);
+        GG.toast.show('已移出卡片，浏览器书签保留', 'success');
+        return;
+      }
       ensureExclusions(app, bm.url);
       GG.toast.show('已隐藏此书签', 'success');
     }
@@ -723,10 +759,10 @@
   }
 
   function deleteBookmark(tile, bm, card) {
-    if (!confirm(`确定删除书签“${bm.title || bm.url}”？`)) return;
+    if (!confirm(`确定从浏览器中删除书签“${bm.title || bm.url}”？所有卡片都会失去对它的引用。`)) return;
     GG.api.bookmarks.remove(bm.id).then(() => {
       tile.remove();
-      pushUndo({ type: 'restoreBookmark', bookmarkId: bm.id, parentId: (card.dataset.folderId) });
+      pushUndo({ type: 'restoreBookmark', bookmarkId: bm.id, parentId: bm.parentId });
       GG.toast.show('已删除', 'success');
     }, () => GG.toast.show('删除失败', 'error'));
   }
@@ -872,7 +908,7 @@
       sub.className = 'sub';
       sub.innerHTML = cardDrag
         ? '拖到任意列并松开，将卡片移入这个分类。'
-        : '在空白处<strong>右键</strong>，或点击右上角<strong>“卡片添加”</strong>，选择一个书签文件夹来生成卡片。';
+        : '在空白处<strong>右键</strong>，或点击右上角<strong>“卡片添加”</strong>，设置要显示的文件夹或书签。';
       empty.append(btn, p, sub);
       grid.appendChild(empty);
     }
@@ -885,6 +921,7 @@
     const card = tpl.content.cloneNode(true).querySelector('.card');
     card.dataset.appId = app.id;
     card.dataset.folderId = app.folderId;
+    card.dataset.sourceMode = GG.CardBookmarks.isSelection(app) ? 'selection' : 'folder';
     card.dataset.recursive = app.recursive ? '1' : '0';
     card.querySelector('.card-title').textContent = app.title;
     const titleEl = card.querySelector('.card-title');
@@ -900,13 +937,13 @@
     else if (app.bodyH) body.style.setProperty('--card-body-h', app.bodyH + 'px');
     setupCardMenu(card, app);
     setupCardDrag(card, app);
-    if (!app.folderId) {
+    if (!app.folderId && !GG.CardBookmarks.isSelection(app)) {
       card.classList.add('unconfigured');
       const body = card.querySelector('.card-body');
       body.innerHTML = '';
       const ph = document.createElement('button');
       ph.className = 'card-set-folder';
-      ph.innerHTML = GG.icon('panelSide') + '<span>设置文件夹</span>';
+      ph.innerHTML = GG.icon('panelSide') + '<span>设置要显示的书签</span>';
       ph.addEventListener('click', (e) => { e.stopPropagation(); openPicker(card, app); });
       body.appendChild(ph);
     } else {
@@ -984,7 +1021,7 @@
         const newTitle = input.value.trim();
         app.title = newTitle;
         persist();
-        GG.api.bookmarks.update(app.folderId, { title: newTitle }).catch(() => {});
+        if (app.folderId) GG.api.bookmarks.update(app.folderId, { title: newTitle }).catch(() => {});
       }
       titleEl.textContent = app.title;
     };
@@ -1239,9 +1276,9 @@
       b.addEventListener('click', () => { menu.classList.remove('open'); menu.closest('.card')?.classList.remove('menu-open'); handler(); });
       menu.appendChild(b);
     };
-    add('重新选择文件夹', 'folder', () => openPicker(card, app));
-    add('包含子文件夹', 'selectSon', () => { app.recursive = !app.recursive; persist(); renderCards(); });
-    add('重命名', 'rename', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
+    add('设置要显示的书签', 'folder', () => openPicker(card, app));
+    if (!GG.CardBookmarks.isSelection(app)) add('包含子文件夹', 'selectSon', () => { app.recursive = !app.recursive; persist(); renderCards(); });
+    add('重命名', 'rename', () => { const n = prompt('卡片名称：', app.title); if (n && n.trim() && n.trim() !== app.title) { const t = n.trim(); app.title = t; persist(); if (app.folderId) GG.api.bookmarks.update(app.folderId, { title: t }).catch(() => {}); renderAll(); } });
     add('删除卡片', 'trash', () => removeCard(app), true);
     more.innerHTML = GG.icon('settings');
     more.addEventListener('click', (e) => { e.stopPropagation(); openMenu(menu, more); });
@@ -1513,6 +1550,7 @@
       // tile 本体不允许拖拽，只允许通过右侧手柄（.tile-more）拖动排序
       if (!e.target.closest('.tile-more')) { e.preventDefault(); return; }
       e.dataTransfer.setData('bookmark-id', tile.dataset.bookmarkId);
+      e.dataTransfer.setData('from-card-id', tile.closest('.card').dataset.appId);
       e.dataTransfer.setData('from-folder', tile.closest('.card').dataset.folderId);
       e.dataTransfer.setData('text/plain', tile.dataset.url || '');
       e.dataTransfer.effectAllowed = 'copyMove';
@@ -1526,12 +1564,13 @@
       document.querySelectorAll('.card.drop-target').forEach((c) => c.classList.remove('drop-target'));
       document.querySelectorAll('.tile.tile-drop').forEach((t) => t.classList.remove('tile-drop'));
     });
-    // show a drop indicator as the tile hovers over another tile
-    grid.addEventListener('dragover', (e) => {
+    // Accept the first entry too, so a quick drag can be dropped immediately.
+    const showTileDrop = (e) => {
       const card = e.target.closest('.card');
       if (!card || !e.dataTransfer.types.includes('bookmark-id')) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      const app = state.apps.find((item) => item.id === card.dataset.appId);
+      e.dataTransfer.dropEffect = (GG.CardBookmarks.isSelection(app) || !app?.folderId) && dragTile?.closest('.card') !== card ? 'copy' : 'move';
       card.classList.add('drop-target');
       document.querySelectorAll('.tile.tile-drop').forEach((t) => t.classList.remove('tile-drop'));
       // 高亮：鼠标落在哪个 gap 就高亮到对应位置
@@ -1541,12 +1580,14 @@
         hit.over.classList.add('tile-drop');
         hit.over.dataset.dropPos = hit.dropPos;
       }
-    });
+    };
+    grid.addEventListener('dragenter', showTileDrop);
+    grid.addEventListener('dragover', showTileDrop);
     grid.addEventListener('dragleave', (e) => {
       const card = e.target.closest('.card');
       if (card && !card.contains(e.relatedTarget)) card.classList.remove('drop-target');
     });
-    grid.addEventListener('drop', (e) => {
+    grid.addEventListener('drop', async (e) => {
       const card = e.target.closest('.card');
       if (!card) return;
       const bmId = e.dataTransfer.getData('bookmark-id');
@@ -1556,6 +1597,25 @@
       e.stopPropagation();
       document.querySelectorAll('.tile.tile-drop').forEach((t) => t.classList.remove('tile-drop'));
       const srcCard = dragTile && dragTile.closest('.card');
+      const targetApp = state.apps.find((app) => app.id === card.dataset.appId);
+      const sourceApp = state.apps.find((app) => app.id === e.dataTransfer.getData('from-card-id'));
+      if (!targetApp) return;
+      if (GG.CardBookmarks.isSelection(targetApp) || !targetApp.folderId) {
+        const tiles = Array.from(card.querySelectorAll('.tile')).filter((tile) => tile !== dragTile);
+        const hit = computeDropTarget(tiles, e.clientY, e.clientY > dragStartY);
+        try {
+          const node = GG.CardBookmarks.flatten(await GG.api.bookmarks.getTree()).find((item) => item.id === bmId);
+          if (!node) throw new Error('书签已不存在');
+          pushUndo({ type: 'selectBookmark', appId: targetApp.id });
+          Object.assign(targetApp, GG.CardBookmarks.place(targetApp, node, hit?.over.dataset.bookmarkId, hit?.dropPos === 'before'));
+          if (targetApp.title === '新卡片') targetApp.title = '自选书签';
+          await persist();
+          renderCards();
+          GG.toast.show(srcCard === card ? '已调整卡片内顺序' : '已添加到卡片，书签原位置保留', 'success');
+        } catch (error) { GG.toast.show('添加失败：' + error.message, 'error'); }
+        return;
+      }
+      if (sourceApp && GG.CardBookmarks.isSelection(sourceApp) && !confirm(`将此书签移动到“${targetApp.title}”？浏览器中的书签位置也会改变，自选卡片仍会保留此书签。`)) return;
       // reorder within the same card
       if (srcCard === card) {
         // 与 dragover 高亮使用完全一致的 computeDropTarget，保证所见即所得
@@ -1624,9 +1684,17 @@
 
   // ---------- Folder picker ----------
   function openPicker(card, app, col) {
-    currentPick = { card, app, mode: 'card', col: (typeof col === 'number' ? col : null) };
+    currentPick = {
+      card, app, mode: 'card', col: (typeof col === 'number' ? col : null),
+      sourceMode: app && GG.CardBookmarks.isSelection(app) ? 'selection' : 'folder',
+      selected: new Set((app?.bookmarkRefs || []).map((ref) => ref.id).filter(Boolean)),
+      nodes: null
+    };
+    selectedFolderId = app?.folderId || null;
+    $('#pickerTitle').textContent = '选择书签';
+    $('#pickerSearch').value = '';
+    setPickerMode(currentPick.sourceMode);
     buildTree();
-    $('#pickerTitle').textContent = app ? '重新选择文件夹' : '选择一个书签文件夹';
     // 根据当前 app 的 recursive 状态初始化「包含子文件夹」复选框
     $('#pickerRecursive').checked = !!(app && app.recursive);
     $('#folderPickerWrap').classList.remove('hidden');
@@ -1636,12 +1704,86 @@
   let selectedFolderId = null;
   let pickerTreeEl = null;
 
+  function setPickerMode(mode) {
+    if (!currentPick) return;
+    currentPick.sourceMode = mode;
+    const selection = mode === 'selection';
+    document.querySelectorAll('[data-picker-mode]').forEach((button) => {
+      const active = button.dataset.pickerMode === mode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    $('#pickerTree').classList.toggle('hidden', selection);
+    $('#pickerBookmarks').classList.toggle('hidden', !selection);
+    $('#pickerSearch').classList.toggle('hidden', !selection);
+    $('#pickerRecursiveLabel').classList.toggle('hidden', selection);
+    $('#pickerSelectionCount').classList.toggle('hidden', !selection);
+    $('#pickerHint').textContent = selection
+      ? '可跨文件夹勾选。编辑会修改原书签；卡片内排序或移出卡片不会改变浏览器中的书签位置。'
+      : '显示所选文件夹中的书签，浏览器中的增删改会同步到卡片。';
+    if (selection) renderPickerBookmarks();
+  }
+
+  function renderPickerBookmarks() {
+    if (!currentPick) return;
+    const pick = currentPick;
+    const list = $('#pickerBookmarks');
+    list.innerHTML = '';
+    $('#pickerSelectionCount').textContent = '已选择 ' + pick.selected.size + ' 个书签';
+    if (!pick.nodes) { list.textContent = '正在读取书签…'; return; }
+    const query = $('#pickerSearch').value.trim().toLowerCase();
+    const matched = pick.nodes.filter((node) => [node.title, node.url, node.folderPath.join(' / ')].join(' ').toLowerCase().includes(query));
+    matched.slice(0, 300).forEach((node) => {
+      const label = document.createElement('label');
+      label.className = 'picker-bookmark';
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = pick.selected.has(node.id);
+      check.addEventListener('change', () => {
+        if (check.checked) pick.selected.add(node.id); else pick.selected.delete(node.id);
+        $('#pickerSelectionCount').textContent = '已选择 ' + pick.selected.size + ' 个书签';
+      });
+      const info = document.createElement('span');
+      info.className = 'bookmark-info';
+      const name = document.createElement('span');
+      name.className = 'bookmark-name';
+      name.textContent = node.title || node.url;
+      const path = document.createElement('span');
+      path.className = 'bookmark-path';
+      path.textContent = node.folderPath.join(' / ') + ' · ' + node.url;
+      info.append(name, path);
+      label.append(check, info);
+      list.appendChild(label);
+    });
+    if (!matched.length) list.textContent = '没有匹配的书签';
+    else if (matched.length > 300) {
+      const hint = document.createElement('p');
+      hint.className = 'picker-hint';
+      hint.textContent = '当前显示前 300 个结果，请搜索以选择更多书签。';
+      list.appendChild(hint);
+    }
+  }
+
   async function buildTree() {
-    const root = await GG.api.bookmarks.getTree();
+    const pick = currentPick;
     pickerTreeEl = $('#pickerTree');
-    pickerTreeEl.innerHTML = '';
-    selectedFolderId = currentPick.app ? currentPick.app.folderId : null;
-    root[0].children.forEach((node) => { if (node.type === 'folder') pickerTreeEl.appendChild(buildNode(node, 0)); });
+    pickerTreeEl.textContent = '正在读取文件夹…';
+    $('#pickerConfirm').disabled = true;
+    try {
+      const root = await GG.api.bookmarks.getTree();
+      if (currentPick !== pick) return;
+      pick.nodes = GG.CardBookmarks.flatten(root);
+      pickerTreeEl.innerHTML = '';
+      ((root[0] && root[0].children) || root).forEach((node) => { if (node.type === 'folder') pickerTreeEl.appendChild(buildNode(node, 0)); });
+      renderPickerBookmarks();
+    } catch (error) {
+      if (currentPick === pick) {
+        pickerTreeEl.textContent = '读取失败，请关闭后重试。';
+        $('#pickerBookmarks').textContent = pickerTreeEl.textContent;
+      }
+    } finally {
+      if (currentPick === pick) $('#pickerConfirm').disabled = !pick.nodes;
+    }
   }
 
   function buildNode(node, depth) {
@@ -1780,47 +1922,57 @@
     grid.querySelectorAll('.grid-col.col-target').forEach((c) => c.classList.remove('col-target'));
   }
 
-  function confirmPick() {
-    if (!selectedFolderId || !currentPick) { GG.toast.show('请选择一个文件夹', 'error'); return; }
-    const { card, app, mode } = currentPick;
+  async function confirmPick() {
+    const pick = currentPick;
+    if (!pick || !pick.nodes) return;
+    const { app } = pick;
+    if (pick.sourceMode === 'selection') {
+      const byId = new Map(pick.nodes.map((node) => [node.id, node]));
+      const bookmarkRefs = Array.from(pick.selected).flatMap((id) => byId.has(id) ? [GG.CardBookmarks.reference(byId.get(id))] : []);
+      pushUndo({ type: 'selectBookmarks', appId: app?.id });
+      const next = app || { id: 'app_' + Date.now(), title: '自选书签', categoryId: state.activeCategory, compact: true, fitMode: 'auto' };
+      Object.assign(next, { sourceMode: 'selection', folderId: null, recursive: false, bookmarkRefs, excluded: [] });
+      if (next.title === '新卡片') next.title = '自选书签';
+      if (!app) {
+        if (pick.col != null) next.col = pick.col;
+        state.apps.push(next);
+        appendOrder(next.id);
+      }
+      closePicker();
+      await persist();
+      renderCards();
+      return;
+    }
+    const folderId = selectedFolderId;
+    const recursive = $('#pickerRecursive').checked;
+    if (!folderId) { GG.toast.show('请选择一个文件夹', 'error'); return; }
     // 检查该文件夹是否已被其它卡片使用（排除当前编辑的卡片本身）
-    const dup = state.apps.find((a) => a.folderId === selectedFolderId && a !== app);
+    const dup = state.apps.find((a) => a.folderId === folderId && a !== app);
     if (dup) {
       GG.toast.show('该文件夹已有对应的卡片「' + (dup.title || '') + '」，请更换文件夹', 'error');
       return;
     }
-    if (mode === 'card' && app) {
-      // re-folder existing app
-      GG.api.bookmarks.get(selectedFolderId).then((arr) => {
-        if (arr && arr[0]) app.title = arr[0].title;
-        app.folderId = selectedFolderId;
-        app.recursive = $('#pickerRecursive').checked; // 同步「包含子文件夹」状态
-        persist().then(renderCards);
-      });
-    } else {
-      // new card
-      const pickedCol = (currentPick && typeof currentPick.col === 'number') ? currentPick.col : null;
-      GG.api.bookmarks.get(selectedFolderId).then((arr) => {
-        const folder = arr && arr[0];
-        const title = folder ? folder.title : '新卡片';
-        const newApp = {
-          id: 'app_' + Date.now(),
-          title,
-          categoryId: state.activeCategory,
-          folderId: selectedFolderId,
-          recursive: $('#pickerRecursive').checked,
-          compact: true,
-          fitMode: 'auto'
-        };
-        // place the new card in the column that was right-clicked (if any)
-        if (pickedCol != null) newApp.col = pickedCol;
-        pushUndo({ type: 'removeCard', app: newApp, existed: false });
-        state.apps.push(newApp);
-        appendOrder(newApp.id);
-        persist().then(renderCards);
-      });
+    $('#pickerConfirm').disabled = true;
+    try {
+      const [folder] = await GG.api.bookmarks.get(folderId);
+      if (currentPick !== pick) return;
+      if (!folder) throw new Error('文件夹已不存在');
+      pushUndo({ type: 'setCardFolder', appId: app?.id });
+      const next = app || { id: 'app_' + Date.now(), categoryId: state.activeCategory, compact: true, fitMode: 'auto' };
+      Object.assign(next, { title: folder.title || '新卡片', sourceMode: 'folder', folderId, recursive, bookmarkRefs: [], excluded: [] });
+      if (!app) {
+        if (pick.col != null) next.col = pick.col;
+        state.apps.push(next);
+        appendOrder(next.id);
+      }
+      closePicker();
+      await persist();
+      renderCards();
+    } catch (error) {
+      GG.toast.show('设置失败：' + error.message, 'error');
+    } finally {
+      if (currentPick === pick) $('#pickerConfirm').disabled = false;
     }
-    closePicker();
   }
 
   // ---------- Undo ----------
@@ -2366,6 +2518,10 @@
     btnAdd.addEventListener('click', () => createBlankCard());
     $('#pickerClose').addEventListener('click', closePicker);
     $('#pickerConfirm').addEventListener('click', confirmPick);
+    document.querySelectorAll('[data-picker-mode]').forEach((button) => {
+      button.addEventListener('click', () => setPickerMode(button.dataset.pickerMode));
+    });
+    $('#pickerSearch').addEventListener('input', renderPickerBookmarks);
     // search
     $('#seGo').addEventListener('click', doSearch);
     $('#searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
@@ -2603,6 +2759,7 @@
     });
     // folder renamed elsewhere -> sync card title; 书签重命名 -> 同步卡片内书签项标题
     GG.api.bookmarks.onChanged.addListener((id, changeInfo) => {
+      refreshSelectionCards();
       if (changeInfo.url !== undefined) {
         GG.api.bookmarks.get(id).then((nodes) => {
           if (nodes[0]) return refreshCardsForFolder(nodes[0].parentId);
@@ -2623,12 +2780,15 @@
         return;
       }
       // 2) 若是书签项被重命名，同步卡片内对应的书签项标题
-      const tile = document.querySelector(`.tile[data-bookmark-id="${CSS.escape(id)}"]`);
-      if (tile) {
+      document.querySelectorAll(`.tile[data-bookmark-id="${CSS.escape(id)}"]`).forEach((tile) => {
         const titleEl = tile.querySelector('.tile-title');
         if (titleEl) titleEl.textContent = changeInfo.title;
         tile.dataset.title = changeInfo.title;
-      }
+      });
+      // Rebuild event handlers too: their bookmark objects must carry the latest title.
+      GG.api.bookmarks.get(id).then((nodes) => {
+        if (nodes[0]) return refreshCardsForFolder(nodes[0].parentId);
+      }).catch(() => {});
     });
     // 书签被创建/删除/移动时：刷新受影响文件夹绑定的卡片（不触发书签上传，上传由后台处理）
     GG.api.bookmarks.onCreated.addListener((id, node) => { if (node && node.parentId) refreshCardsForFolder(node.parentId); });

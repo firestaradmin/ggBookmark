@@ -1053,11 +1053,11 @@
     wireColToggle();
     applyColToggleUI();
     await loadTree();
-    let first = null, second = null;
-    walkFolders(tree, (fnode) => { if (!first) first = fnode.id; else if (!second) second = fnode.id; });
-    if (first) addPanel(first);
-    if (second) addPanel(second);
-    if (!first && !second) addPanel(DEFAULT_ROOT);
+    const bookmarkBar = tree.find((node) => node.type === 'folder' && (node.folderType === 'bookmarks-bar' || node.id === '1'))
+      || tree.find((node) => node.type === 'folder');
+    const initialFolderId = bookmarkBar ? bookmarkBar.id : DEFAULT_ROOT;
+    addPanel(initialFolderId);
+    addPanel(initialFolderId);
   }
 
   document.addEventListener('DOMContentLoaded', init);
